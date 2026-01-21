@@ -1,0 +1,18 @@
+{
+    "ExpName": "2025_232Th",
+    "ParaPath": "/home/qyj/work/XSana/Para/",
+    "OriginData": "/home/qyj/work/XSana/Data/OriginData/",
+    "RootData": "/home/qyj/work/XSana/Data/RootData/",
+    "T0Path": "/home/qyj/work/XSana/Data/T0Data/",
+    "XSPath": "/home/qyj/work/XS/",
+    "ENDFDATAU5NF": "ENDFXS235UNF.dat",
+    "ENDFDATAU8NF": "ENDFXS238UNF.dat",
+    "UNDETECLiSi": "UNDETECLiSi.dat",
+    "UNENDFDATAU5NF": "UNENDFXS235UNF.dat",
+    "UNENDFDATAU8NF": "UNENDFXS238UNF.dat",
+    "ENDFDATAU5NTOT": "ENDFXS235UNTOT.dat",
+    "ENDFDATAU8NTOT": "ENDFXS238UNTOT.dat",
+    "ENDFDATALiSi": "ENDFXS6LiNT.dat",
+    "DELTALDATA": "En_DeltaL.dat",
+    "EFFLiSi": "eff_LiSi_2_303030.dat"
+}
