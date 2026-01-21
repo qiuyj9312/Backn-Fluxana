@@ -1,0 +1,130 @@
+{
+    "ExperimentCondition": {
+        "BeamConfig": "60-30-30",
+        "BeamWindow": {"Cd": {"thickness": {"value": 1, "unit": "mm"}}},
+        "BeamMode": "DoubleBunch",
+        "EndStation": "2",
+        "FPulse": {
+            "value": 25,
+            "unit": "Hz"
+        },
+        "BeamPower": {
+            "value":125,
+            "unit": "kW"
+        },
+        "BeamRadius":{
+            "value":15,
+            "unit": "mm"
+        }
+    },
+    "note": "none",
+    "FIXM":{
+        "Global":{
+            "gammaFitRange":[-1385, -1375],
+            "LCalEn":[8.73815, 12.3357, 19.2058],
+            "LCaldT":[1.89604e+06, 1.5963e+06, 1.2792e+06],
+            "LengthSet": 77.5536,
+            "NoiseCut":10.0,
+            "CHIDUSE":[3,4,5,6,7,8],
+            "EnergyDivide": [0.1, 1e3, 5e4]
+        },
+        "Channels":{
+            "3":{
+                "DetID": 3,
+                "Tg": -1378.9,
+                "Threshold": 121,
+                "ThresholdFitcut": 185.0,
+                "ThresholdEDivide": [0.996337, 0.996452, 0.996860],
+                "Length": 77.584254,
+                "SampleType": "U5",
+                "SampleNumber": 4,
+                "Mass": 5.701,
+                "Radius": 24.9,
+                "A": 235,
+                "DetEff": 0.9768
+            },
+            "4":{
+                "DetID": 4,
+                "Tg": -1376.79,
+                "Threshold": 121,
+                "ThresholdFitcut": 190.0,
+                "ThresholdEDivide": [0.993892, 0.994021, 0.995015],
+                "Length": 77.603254,
+                "SampleType": "U5",
+                "SampleNumber": 5,
+                "Mass": 6.319,
+                "Radius": 24.9,
+                "A": 235,
+                "DetEff": 0.9744
+            },
+            "5":{
+                "DetID": 5,
+                "Tg": -1379.58,
+                "Threshold": 113,
+                "ThresholdFitcut": 170.0,
+                "ThresholdEDivide": [0.989849, 0.989282, 0.998801],
+                "Length": 77.622254,
+                "SampleType": "U8",
+                "SampleNumber": 1,
+                "Mass": 4.991,
+                "Radius": 24.9,
+                "A": 238,
+                "DetEff": 0.9799
+            },
+            "6":{
+                "DetID": 6,
+                "Tg": -1379.73,
+                "Threshold": 135,
+                "ThresholdFitcut": 185.0,
+                "ThresholdEDivide": [0.989849, 0.989282, 0.999306],
+                "Length": 77.641254,
+                "SampleType": "U8",
+                "SampleNumber": 2,
+                "Mass": 4.987,
+                "Radius": 24.9,
+                "A": 238,
+                "DetEff": 0.9798
+            },
+            "7":{
+                "DetID": 7,
+                "Tg": -1135.37,
+                "Threshold": 183,
+                "ThresholdFitcut": 230.0,
+                "ThresholdEDivide": [0.989849, 0.989282, 0.999306],
+                "Length": 77.660254,
+                "SampleType": "U8",
+                "SampleNumber": 4,
+                "Mass": 4.684,
+                "Radius": 24.9,
+                "A": 238,
+                "DetEff": 0.9811
+            },
+            "8":{
+                "DetID": 8,
+                "Tg": -1139.34,
+                "Threshold": 163,
+                "ThresholdFitcut": 220.0,
+                "ThresholdEDivide": [0.989849, 0.989282, 0.999441],
+                "Length": 77.679254,
+                "SampleType": "U8",
+                "SampleNumber": 7,
+                "Mass": 4.794,
+                "Radius": 24.9,
+                "A": 238,
+                "DetEff": 0.9806
+            }
+        }
+    },
+    "Files": {
+        "RawTreeName": "WNSRawTree",
+        "RootTreeName": "tree",
+        "filelist": [
+            "run19778.root",
+            "run19779.root",
+            "run19780.root",
+            "run19781.root",
+            "run19782.root"
+        ]
+    }
+
+}
