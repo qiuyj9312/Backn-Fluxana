@@ -72,6 +72,8 @@ if(NLOHMANN_JSON_INCLUDE_DIR)
     add_executable(rdataframe_analysis
         rdataframe_analysis.cpp
         src/RDataFrameAnalysis.cxx
+        src/CrossSectionAnalysis.cxx
+        src/NeutronFluxAnalysis.cxx
         src/ConfigReader.cxx
     )
     

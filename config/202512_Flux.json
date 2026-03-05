@@ -10,21 +10,21 @@
       }
     },
     "ExperimentTime": {
-      "value": 202504,
+      "value": 202512,
       "unit": "yyyymm"
     },
-    "BeamMode": "SingleBunch",
+    "BeamMode": "DoubleBunch",
     "EndStation": "2",
     "FPulse": {
       "value": 25,
       "unit": "Hz"
     },
     "BeamPower": {
-      "value": 95,
+      "value": 160,
       "unit": "kW"
     },
     "BeamRadius": {
-      "value": 30,
+      "value": 15,
       "unit": "mm"
     }
   },
@@ -95,7 +95,7 @@
         "value": 0.019,
         "unit": "m"
       },
-      "CHIDUSE": [3, 4, 5, 6, 7, 8],
+      "CHIDUSE": [51, 52],
       "EnergyDivide": [
         {
           "value": 0.1,
@@ -137,7 +137,7 @@
       }
     },
     "Channels": {
-      "3": {
+      "51": {
         "DetID": 3,
         "Tg": {
           "value": -1378.9,
@@ -196,7 +196,7 @@
         },
         "DetEff": 0.9768
       },
-      "4": {
+      "52": {
         "DetID": 4,
         "Tg": {
           "value": -1376.79,
@@ -254,239 +254,6 @@
           "unit": ""
         },
         "DetEff": 0.9744
-      },
-      "5": {
-        "DetID": 5,
-        "Tg": {
-          "value": -1379.58,
-          "unit": "ns"
-        },
-        "Threshold": {
-          "value": 205,
-          "unit": "amp"
-        },
-        "ThresholdRe": [
-          {
-            "value": 205,
-            "unit": "amp"
-          },
-          {
-            "value": 205,
-            "unit": "amp"
-          },
-          {
-            "value": 205,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdFitcut": [
-          {
-            "value": 250,
-            "unit": "amp"
-          },
-          {
-            "value": 250,
-            "unit": "amp"
-          },
-          {
-            "value": 250,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdEDivide": [1.0, 1.0, 0.994971],
-        "Length": {
-          "value": 55.827445,
-          "unit": "m"
-        },
-        "SampleType": "232Th",
-        "SampleNumber": 1,
-        "Mass": {
-          "value": 3.477,
-          "unit": "mg"
-        },
-        "Radius": {
-          "value": 24.9,
-          "unit": "mm"
-        },
-        "A": {
-          "value": 232,
-          "unit": ""
-        },
-        "DetEff": 0.9799
-      },
-      "6": {
-        "DetID": 6,
-        "Tg": {
-          "value": -1379.73,
-          "unit": "ns"
-        },
-        "Threshold": {
-          "value": 197,
-          "unit": "amp"
-        },
-        "ThresholdRe": [
-          {
-            "value": 197,
-            "unit": "amp"
-          },
-          { "value": 197, "unit": "amp" },
-          {
-            "value": 197,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdFitcut": [
-          {
-            "value": 255,
-            "unit": "amp"
-          },
-          {
-            "value": 255,
-            "unit": "amp"
-          },
-          {
-            "value": 255,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdEDivide": [1.0, 1.0, 0.987383],
-        "Length": {
-          "value": 55.846445,
-          "unit": "m"
-        },
-        "SampleType": "232Th",
-        "SampleNumber": 2,
-        "Mass": {
-          "value": 3.207,
-          "unit": "mg"
-        },
-        "Radius": {
-          "value": 24.9,
-          "unit": "mm"
-        },
-        "A": {
-          "value": 232,
-          "unit": ""
-        },
-        "DetEff": 0.9798
-      },
-      "7": {
-        "DetID": 7,
-        "Tg": {
-          "value": -1379.73,
-          "unit": "ns"
-        },
-        "Threshold": {
-          "value": 243,
-          "unit": "amp"
-        },
-        "ThresholdRe": [
-          {
-            "value": 243,
-            "unit": "amp"
-          },
-          {
-            "value": 243,
-            "unit": "amp"
-          },
-          {
-            "value": 243,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdFitcut": [
-          {
-            "value": 305,
-            "unit": "amp"
-          },
-          {
-            "value": 305,
-            "unit": "amp"
-          },
-          {
-            "value": 305,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdEDivide": [1.0, 1.0, 0.990436],
-        "Length": {
-          "value": 55.846445,
-          "unit": "m"
-        },
-        "SampleType": "232Th",
-        "SampleNumber": 3,
-        "Mass": {
-          "value": 3.372,
-          "unit": "mg"
-        },
-        "Radius": {
-          "value": 24.9,
-          "unit": "mm"
-        },
-        "A": {
-          "value": 232,
-          "unit": ""
-        },
-        "DetEff": 0.9811
-      },
-      "8": {
-        "DetID": 8,
-        "Tg": {
-          "value": -1378.25,
-          "unit": "ns"
-        },
-        "Threshold": {
-          "value": 217,
-          "unit": "amp"
-        },
-        "ThresholdRe": [
-          {
-            "value": 217,
-            "unit": "amp"
-          },
-          {
-            "value": 217,
-            "unit": "amp"
-          },
-          {
-            "value": 217,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdFitcut": [
-          {
-            "value": 275,
-            "unit": "amp"
-          },
-          {
-            "value": 275,
-            "unit": "amp"
-          },
-          {
-            "value": 275,
-            "unit": "amp"
-          }
-        ],
-        "ThresholdEDivide": [1.0, 1.0, 0.992248],
-        "Length": {
-          "value": 55.884445,
-          "unit": "m"
-        },
-        "SampleType": "232Th",
-        "SampleNumber": 4,
-        "Mass": {
-          "value": 3.8,
-          "unit": "mg"
-        },
-        "Radius": {
-          "value": 24.9,
-          "unit": "mm"
-        },
-        "A": {
-          "value": 232,
-          "unit": ""
-        },
-        "DetEff": 0.9806
       }
     }
   },
@@ -494,18 +261,18 @@
     "RawTreeName": "WNSRawTree",
     "RootTreeName": "tree",
     "filelist": [
-      "run19778.root",
-      "run19779.root",
-      "run19780.root",
-      "run19781.root",
-      "run19782.root"
+      "run20363.root",
+      "run20364.root",
+      "run20365.root",
+      "run20366.root",
+      "run20367.root"
     ],
     "T0list": [
-      "run19778.root",
-      "run19779.root",
-      "run19780.root",
-      "run19781.root",
-      "run19782.root"
+      "T020363.root",
+      "T020364.root",
+      "T020365.root",
+      "T020366.root",
+      "T020367.root"
     ],
     "timelist": [
       {

@@ -7,8 +7,12 @@ lib/
 *.o
 *.so
 *.a
+*.d
+*.dict
+*.pcm
 *.dylib
-
+*.txt
+!CMakeLists.txt
 # CMake
 CMakeCache.txt
 CMakeFiles/
@@ -16,15 +20,20 @@ cmake_install.cmake
 install_manifest.txt
 
 # IDE
+.agent
+.clangd
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.prettierrc.json
 
 # ROOT files
 *.root
 *.root~
+*.png
+*.pdf
 
 # Logs
 *.log
@@ -32,3 +41,10 @@ install_manifest.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# xsdata
+OutPut/**/*.csv
+OutPut/**/*.dat
+
+Simulation/
+*.pyc

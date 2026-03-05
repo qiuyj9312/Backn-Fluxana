@@ -6,9 +6,12 @@
  ****************************************************/
 
 #include "ConfigReader.h"
+#include "CrossSectionAnalysis.h"
+#include "NeutronFluxAnalysis.h"
 #include "RDataFrameAnalysis.h"
 #include "TApplication.h"
 #include <iostream>
+#include <vector>
 
 /**
  * @brief Main function
@@ -23,26 +26,37 @@ int main(int argc, char **argv) {
   // Print header
   RDataFrameAnalysis::PrintHeader();
 
-  // Default config file path
+  // Default config file path and analysis type
   std::string filepathConfig = "config/filepath.json";
+  std::string analysisType = "GetThR1"; // Default analysis type
 
   // Parse command line arguments (skip TApplication arguments)
   for (int i = 1; i < theApp.Argc(); ++i) {
     std::string arg = theApp.Argv(i);
     if (arg == "--help" || arg == "-h") {
-      std::cout << "Usage: " << argv[0] << " [config_file]" << std::endl;
+      std::cout << "Usage: " << argv[0] << " [analysis_type]" << std::endl;
       std::cout << std::endl;
       std::cout << "Arguments:" << std::endl;
-      std::cout << "  config_file    Path to filepath.json (default: "
-                   "config/filepath.json)"
+      std::cout << "  analysis_type  Type of analysis to run (default: GetThR1)"
                 << std::endl;
+      std::cout << std::endl;
+      std::cout << "Available analysis types:" << std::endl;
+      std::cout << "  - GetGammaFlash" << std::endl;
+      std::cout << "  - GetThR1" << std::endl;
+      std::cout << "  - GetPileupCorr" << std::endl;
+      std::cout << "  - CountT0" << std::endl;
+      std::cout << "  - CalFlux" << std::endl;
+      std::cout << "  - CalUncertainty" << std::endl;
+      std::cout << "  - AnalyzeWithRDataFrame" << std::endl;
       std::cout << std::endl;
       std::cout << "Examples:" << std::endl;
       std::cout << "  " << argv[0] << std::endl;
-      std::cout << "  " << argv[0] << " config/filepath.json" << std::endl;
+      std::cout << "  " << argv[0] << " GetGammaFlash" << std::endl;
+      std::cout << "  " << argv[0] << " GetThR1" << std::endl;
+      std::cout << "  " << argv[0] << " AnalyzeWithRDataFrame" << std::endl;
       return 0;
     } else {
-      filepathConfig = arg;
+      analysisType = arg;
     }
   }
 
@@ -68,11 +82,36 @@ int main(int argc, char **argv) {
   // Step 5: Print configuration summary
   configReader.PrintSummary();
 
-  // Step 6: Create RDataFrameAnalysis instance with ConfigReader
-  RDataFrameAnalysis analysis(configReader);
+  // Step 6: 根据分析类型选择合适的分析类
+  std::cout << "Running analysis type: " << analysisType << std::endl;
 
-  // Step 7: Run the analysis
-  if (!analysis.RunAnalysis()) {
+  bool success = false;
+
+  // 截面分析类型列表
+  std::vector<std::string> xsAnalysisTypes = {"GetXSSingleBunch"};
+
+  // 检查是否为截面分析
+  bool isCrossSectionAnalysis = false;
+  for (const auto &type : xsAnalysisTypes) {
+    if (analysisType == type) {
+      isCrossSectionAnalysis = true;
+      break;
+    }
+  }
+
+  if (isCrossSectionAnalysis) {
+    // 使用截面分析类
+    std::cout << "Using CrossSectionAnalysis class..." << std::endl;
+    CrossSectionAnalysis analysis(configReader);
+    success = analysis.RunAnalysis(analysisType);
+  } else {
+    // 使用中子通量分析类 (包含所有其他分析类型)
+    std::cout << "Using NeutronFluxAnalysis class..." << std::endl;
+    NeutronFluxAnalysis analysis(configReader);
+    success = analysis.RunAnalysis(analysisType);
+  }
+
+  if (!success) {
     std::cerr << "Error: Analysis failed" << std::endl;
     return 1;
   }

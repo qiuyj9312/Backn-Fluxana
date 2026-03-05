@@ -31,8 +31,18 @@ constexpr double Na = 6.02214076e23;
 constexpr double cspeed = 0.29979;       // speed of light: m/ns
 constexpr double Mneutron = 939.5654133; // mass of neutron: MeV
 
-EColor color[] = {kRed,    kBlue, kBlack,  kGreen,  kYellow, kMagenta, kCyan,
-                  kOrange, kPink, kSpring, kViolet, kTeal,   kAzure};
+// Unit conversion factors
+constexpr double mm_to_cm = 0.1;
+constexpr double cm_to_mm = 10.0;
+constexpr double eV_to_MeV = 1e-6;
+constexpr double MeV_to_eV = 1e6;
+constexpr double barn_to_cm2 = 1e-24;
+constexpr double cm2_to_barn = 1e24;
+constexpr double mg_to_g = 1e-3;
+
+static EColor color[] = {kRed,     kBlue, kBlack,  kGreen, kYellow,
+                         kMagenta, kCyan, kOrange, kPink,  kSpring,
+                         kViolet,  kTeal, kAzure};
 
 /**
  * @name: calEn
@@ -41,7 +51,7 @@ EColor color[] = {kRed,    kBlue, kBlack,  kGreen,  kYellow, kMagenta, kCyan,
  * @param {double} length :m
  * @return {*}
  */
-double calEn(double tof, double length) {
+inline double calEn(double tof, double length) {
   auto En =
       Mneutron *
       (1. / sqrt(1. - length * length / (cspeed * tof) / (cspeed * tof)) - 1.) *
@@ -56,7 +66,7 @@ double calEn(double tof, double length) {
  * @param {double} length
  * @return {*}
  */
-double calTOF(double energy, double length) {
+inline double calTOF(double energy, double length) {
   auto tof = length / cspeed *
              sqrt(1.0 / (1.0 - 1.0 / (1.0 + energy / 1e6 / Mneutron) /
                                    (1.0 + energy / 1e6 / Mneutron)));
@@ -71,7 +81,7 @@ double calTOF(double energy, double length) {
  * @param {double} xmax
  * @return minBin
  */
-int GetHistogramMinBinInRange(TH1 *hist, double xmin, double xmax) {
+inline int GetHistogramMinBinInRange(TH1 *hist, double xmin, double xmax) {
 
   // 找到指定区间的bin索引
   int binMin = hist->GetXaxis()->FindBin(xmin);
@@ -101,7 +111,7 @@ int GetHistogramMinBinInRange(TH1 *hist, double xmin, double xmax) {
  * @param {double} xmax
  * @return {*}
  */
-int GetHistogramMaxBinInRange(TH1 *hist, double xmin, double xmax) {
+inline int GetHistogramMaxBinInRange(TH1 *hist, double xmin, double xmax) {
 
   // 找到指定区间的bin索引
   int binMin = hist->GetXaxis()->FindBin(xmin);
@@ -123,7 +133,8 @@ int GetHistogramMaxBinInRange(TH1 *hist, double xmin, double xmax) {
   return maxBin;
 }
 
-int read_proton(const char *fileName, std::map<TString, double> &map_data) {
+inline int read_proton(const char *fileName,
+                       std::map<TString, double> &map_data) {
   std::ifstream fin_txt(fileName);
   if (!fin_txt.is_open()) {
     std::cerr << "no such file to read proton!" << std::endl;
@@ -158,8 +169,8 @@ int read_proton(const char *fileName, std::map<TString, double> &map_data) {
  * @param {double} times
  * @return {*}
  */
-int get_graph(const char *filename, TGraph *graph_, double times = 1.,
-              TString opts = "") {
+inline int get_graph(const char *filename, TGraph *graph_, double times = 1.,
+                     TString opts = "") {
   std::ifstream fin_txt(filename);
   if (!fin_txt.is_open()) {
     std::cerr << "no such file to read graph para!" << std::endl;
@@ -201,7 +212,7 @@ int get_graph(const char *filename, TGraph *graph_, double times = 1.,
  * @param {TH1*} h1
  * @return {*}
  */
-int graph2hist(TGraph *gr, TH1 *h1, TString opts = "") {
+inline int graph2hist(TGraph *gr, TH1 *h1, TString opts = "") {
   for (size_t i = 0; i < h1->GetNbinsX(); i++) {
     auto x = h1->GetBinCenter(i + 1);
     auto y = gr->Eval(x, nullptr, opts);
@@ -213,7 +224,7 @@ int graph2hist(TGraph *gr, TH1 *h1, TString opts = "") {
   return 1;
 }
 
-void get_sta_errorhist(TH1D *hinput, TH1D *herror) {
+inline void get_sta_errorhist(TH1D *hinput, TH1D *herror) {
   herror->Reset();
   for (size_t i = 0; i < hinput->GetNbinsX(); i++) {
     auto bincontent = hinput->GetBinContent(i + 1);
@@ -225,7 +236,7 @@ void get_sta_errorhist(TH1D *hinput, TH1D *herror) {
   }
 }
 
-void set_binerror(TH1D *hinput, TH1D *herror) {
+inline void set_binerror(TH1D *hinput, TH1D *herror) {
   // check
   auto n1 = hinput->GetNbinsX();
   auto n2 = herror->GetNbinsX();
@@ -241,7 +252,7 @@ void set_binerror(TH1D *hinput, TH1D *herror) {
   }
 }
 
-void add_error(TH1D *hinput1, TH1D *hinput2, TH1D *herrortot) {
+inline void add_error(TH1D *hinput1, TH1D *hinput2, TH1D *herrortot) {
   herrortot->Reset();
   for (size_t i = 0; i < herrortot->GetNbinsX(); i++) {
     auto error1 = hinput1->GetBinContent(i + 1);
@@ -251,7 +262,7 @@ void add_error(TH1D *hinput1, TH1D *hinput2, TH1D *herrortot) {
   }
 }
 
-void add_error(TH1D *hinput, TH1D *herrortot) {
+inline void add_error(TH1D *hinput, TH1D *herrortot) {
   for (size_t i = 0; i < herrortot->GetNbinsX(); i++) {
     auto error1 = hinput->GetBinContent(i + 1);
     auto error2 = herrortot->GetBinContent(i + 1);
@@ -268,7 +279,7 @@ void add_error(TH1D *hinput, TH1D *herrortot) {
   }
 }
 
-void get_rerror(TH1D *hinput, TH1D *h_aerror, TH1D *h_rerror) {
+inline void get_rerror(TH1D *hinput, TH1D *h_aerror, TH1D *h_rerror) {
   h_rerror->Reset();
   for (size_t i = 0; i < hinput->GetNbinsX(); i++) {
     auto bincontent = hinput->GetBinContent(i + 1);
@@ -280,7 +291,7 @@ void get_rerror(TH1D *hinput, TH1D *h_aerror, TH1D *h_rerror) {
   }
 }
 
-void get_aerror(TH1D *hinput, TH1D *hr_error, TH1D *ha_error) {
+inline void get_aerror(TH1D *hinput, TH1D *hr_error, TH1D *ha_error) {
   ha_error->Reset();
   for (size_t i = 0; i < hinput->GetNbinsX(); i++) {
     auto bincontent = hinput->GetBinContent(i + 1);
@@ -293,7 +304,7 @@ void get_aerror(TH1D *hinput, TH1D *hr_error, TH1D *ha_error) {
   }
 }
 
-void get_aerror(TH1D *hinput, TH1D *ha_error) {
+inline void get_aerror(TH1D *hinput, TH1D *ha_error) {
   ha_error->Reset();
   for (size_t i = 0; i < hinput->GetNbinsX(); i++) {
     auto binerror = hinput->GetBinError(i + 1);
@@ -304,8 +315,8 @@ void get_aerror(TH1D *hinput, TH1D *ha_error) {
   }
 }
 
-void get_nomintergral_error(TH1D *hinput1, TH1D *hinput2, TH1D *herror,
-                            const double *binrange) {
+inline void get_nomintergral_error(TH1D *hinput1, TH1D *hinput2, TH1D *herror,
+                                   const double *binrange) {
   herror->Reset();
   auto ibin_spec_sta = hinput1->FindBin(binrange[0]);
   auto ibin_spec_sto = hinput1->FindBin(binrange[1]);
@@ -333,7 +344,8 @@ void get_nomintergral_error(TH1D *hinput1, TH1D *hinput2, TH1D *herror,
   std::cout << "norm uncertainty " << errortot << std::endl;
 }
 
-void getrangehist(TH1D *hinput, TH1D *hout, Double_t xmin, Double_t xmax) {
+inline void getrangehist(TH1D *hinput, TH1D *hout, Double_t xmin,
+                         Double_t xmax) {
   hout->Reset();
   for (size_t i = 0; i < hinput->GetNbinsX(); i++) {
     double binCenter = hinput->GetBinLowEdge(i + 1);
@@ -345,7 +357,7 @@ void getrangehist(TH1D *hinput, TH1D *hout, Double_t xmin, Double_t xmax) {
   }
 }
 
-void getrangehist(TH1D *hinput, TH1D *hout, int ixmin, int ixmax) {
+inline void getrangehist(TH1D *hinput, TH1D *hout, int ixmin, int ixmax) {
   hout->Reset();
   for (size_t i = 0; i < hinput->GetNbinsX(); i++) {
     if (i >= ixmin && i <= ixmax) { // 检查bin的中心是否在指定范围内
@@ -355,7 +367,7 @@ void getrangehist(TH1D *hinput, TH1D *hout, int ixmin, int ixmax) {
   }
 }
 
-void movehist(TH1D *hinput, TH1D *hout, Double_t movestep) {
+inline void movehist(TH1D *hinput, TH1D *hout, Double_t movestep) {
   hout->Reset();
   auto imovestep = movestep / hout->GetBinWidth(1);
   for (size_t i = 0; i < hinput->GetNbinsX() - imovestep; i++) {
@@ -365,7 +377,7 @@ void movehist(TH1D *hinput, TH1D *hout, Double_t movestep) {
   }
 }
 
-void smooth_gdata(TGraph *gin, TGraph *gout) {
+inline void smooth_gdata(TGraph *gin, TGraph *gout) {
   int n = gin->GetN();
   double log_x[n], log_y[n];
 
@@ -391,7 +403,7 @@ void smooth_gdata(TGraph *gin, TGraph *gout) {
   SafeDelete(spline_log);
 }
 
-TH1D *getsimhist(const char *filename, double timesE = 1.) {
+inline TH1D *getsimhist(const char *filename, double timesE = 1.) {
   TH1D *h{nullptr};
   std::ifstream fin_txt(filename);
   if (!fin_txt.is_open()) {
@@ -440,7 +452,8 @@ TH1D *getsimhist(const char *filename, double timesE = 1.) {
   return h;
 }
 
-bool ensure_path_exists(const std::string &path, const std::string &label) {
+inline bool ensure_path_exists(const std::string &path,
+                               const std::string &label) {
   if (gSystem->AccessPathName(path.c_str())) {
     std::cerr << "[Error] " << label << " not found: " << path << std::endl;
     return false;
@@ -448,12 +461,29 @@ bool ensure_path_exists(const std::string &path, const std::string &label) {
   return true;
 }
 
-std::vector<Double_t> SetLogBins(int nDec, int bpd, Double_t LowEdge) {
+inline std::vector<Double_t> SetLogBins(int nDec, int bpd, Double_t LowEdge) {
   int nbins = nDec * bpd;
   std::vector<Double_t> bins(nbins + 1);
   for (Int_t i = 0; i <= nbins; i++) {
     bins[i] = pow(10, LowEdge + 1. / (double)bpd * (double)i);
   }
   return bins;
+}
+
+/**
+ * @name: caldT
+ * @msg: calculate time difference for flight path calibration : ns
+ * @param {double*} x : array with x[0] = energy (eV)
+ * @param {double*} par : array with par[0] = length (m)
+ * @return {double} time difference (ns)
+ */
+inline double caldT(double *x, double *par) {
+  double energy = x[0];   // variable energy
+  double length = par[0]; // parameter length
+  double dt = length / cspeed *
+                  sqrt(1.0 / (1.0 - 1.0 / (1.0 + energy / 1e6 / Mneutron) /
+                                        (1.0 + energy / 1e6 / Mneutron))) -
+              length / cspeed;
+  return dt;
 }
 #endif
