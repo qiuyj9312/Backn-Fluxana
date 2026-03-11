@@ -19,6 +19,14 @@
       "value": 25,
       "unit": "Hz"
     },
+    "ProtonEnergy": {
+      "value": 1600000000,
+      "unit": "eV"
+    },
+    "ProtonCutPercent": {
+      "value": 0.1,
+      "unit": ""
+    },
     "BeamPower": {
       "value": 160,
       "unit": "kW"
@@ -33,11 +41,11 @@
     "Global": {
       "gammaFitRange": [
         {
-          "value": -1385,
+          "value": -1420,
           "unit": "ns"
         },
         {
-          "value": -1375,
+          "value": -1320,
           "unit": "ns"
         }
       ],
@@ -67,69 +75,72 @@
       ],
       "LCaldT": [
         {
-          "value": 1.3645e6,
+          "value": 1365190,
           "unit": "ns"
         },
         {
-          "value": 1.1484e6,
+          "value": 1148710,
           "unit": "ns"
         },
         {
-          "value": 919714.0,
+          "value": 920478,
           "unit": "ns"
         }
       ],
       "DeadTimeConstant": {
-        "value": 75.0,
+        "value": 75,
         "unit": "ns"
       },
       "LengthSet": {
-        "value": 55.0,
+        "value": 55,
         "unit": "m"
       },
       "NoiseCut": {
-        "value": 10.0,
+        "value": 10,
         "unit": "amp"
       },
       "DL_cell": {
         "value": 0.019,
         "unit": "m"
       },
-      "CHIDUSE": [51, 52],
+      "CHIDUSE": [
+        51,
+        52
+      ],
       "EnergyDivide": [
         {
           "value": 0.1,
           "unit": "eV"
         },
         {
-          "value": 1e2,
+          "value": 100,
           "unit": "eV"
         },
         {
-          "value": 5e4,
+          "value": 50000,
           "unit": "eV"
         }
       ],
       "EnergyCut_Low": {
-        "value": 1e4,
+        "value": 10000,
         "unit": "eV"
       },
       "EnergyCut_U8": {
-        "value": 1e6,
+        "value": 1000000,
         "unit": "eV"
       },
       "EnergyCut_High": {
-        "value": 3e8,
+        "value": 300000000,
         "unit": "eV"
       },
       "UFRandomTimes": {
-        "value": 100,
+        "value": 1,
         "unit": ""
       },
       "Bin": {
         "bpd": 100,
         "nDec": 10,
-        "LowEdge": -1.0
+        "LowEdge": -1
       },
       "NRebin": {
         "value": 5,
@@ -144,7 +155,7 @@
           "unit": "ns"
         },
         "Threshold": {
-          "value": 151,
+          "value": 133,
           "unit": "amp"
         },
         "ThresholdRe": [
@@ -175,7 +186,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [0.993786, 0.993982, 0.993943],
+        "ThresholdEDivide": [
+          0.992726,
+          0.992645,
+          0.992819
+        ],
         "Length": {
           "value": 55.789445,
           "unit": "m"
@@ -199,42 +214,46 @@
       "52": {
         "DetID": 4,
         "Tg": {
-          "value": -1376.79,
+          "value": -1373.57,
           "unit": "ns"
         },
         "Threshold": {
-          "value": 143,
+          "value": 121,
           "unit": "amp"
         },
         "ThresholdRe": [
           {
-            "value": 143,
+            "value": 155,
             "unit": "amp"
           },
           {
-            "value": 143,
+            "value": 155,
             "unit": "amp"
           },
           {
-            "value": 143,
+            "value": 150,
             "unit": "amp"
           }
         ],
         "ThresholdFitcut": [
           {
-            "value": 205,
+            "value": 215,
             "unit": "amp"
           },
           {
-            "value": 205,
+            "value": 215,
             "unit": "amp"
           },
           {
-            "value": 205,
+            "value": 215,
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [0.988722, 0.988556, 0.988992],
+        "ThresholdEDivide": [
+          0.984393,
+          0.984633,
+          0.987257
+        ],
         "Length": {
           "value": 55.808445,
           "unit": "m"
@@ -265,34 +284,76 @@
       "run20364.root",
       "run20365.root",
       "run20366.root",
-      "run20367.root"
+      "run20367.root",
+      "run20368.root",
+      "run20369.root",
+      "run20370.root",
+      "run20371.root",
+      "run20372.root",
+      "run20373.root",
+      "run20374.root"
     ],
     "T0list": [
-      "T020363.root",
-      "T020364.root",
-      "T020365.root",
-      "T020366.root",
-      "T020367.root"
+      "run20363.root",
+      "run20364.root",
+      "run20365.root",
+      "run20366.root",
+      "run20367.root",
+      "run20368.root",
+      "run20369.root",
+      "run20370.root",
+      "run20371.root",
+      "run20372.root",
+      "run20373.root",
+      "run20374.root"
     ],
     "timelist": [
       {
-        "value": 42815.2,
+        "value": 15293.3,
         "unit": "s"
       },
       {
-        "value": 43883.7,
+        "value": 15353.3,
         "unit": "s"
       },
       {
-        "value": 39555.7,
+        "value": 15445.9,
         "unit": "s"
       },
       {
-        "value": 39306.2,
+        "value": 15422.8,
         "unit": "s"
       },
       {
-        "value": 45437.4,
+        "value": 15989.5,
+        "unit": "s"
+      },
+      {
+        "value": 15503.5,
+        "unit": "s"
+      },
+      {
+        "value": 15586.4,
+        "unit": "s"
+      },
+      {
+        "value": 15596.7,
+        "unit": "s"
+      },
+      {
+        "value": 15738.7,
+        "unit": "s"
+      },
+      {
+        "value": 15654,
+        "unit": "s"
+      },
+      {
+        "value": 15589.1,
+        "unit": "s"
+      },
+      {
+        "value": 44752.2,
         "unit": "s"
       }
     ]

@@ -14,6 +14,14 @@
       "unit": "yyyymm"
     },
     "BeamMode": "SingleBunch",
+    "ProtonEnergy": {
+      "value": 1600000000,
+      "unit": "eV"
+    },
+    "ProtonCutPercent": {
+      "value": 0.1,
+      "unit": ""
+    },
     "EndStation": "2",
     "FPulse": {
       "value": 25,
@@ -67,59 +75,66 @@
       ],
       "LCaldT": [
         {
-          "value": 1.3645e6,
+          "value": 1364500,
           "unit": "ns"
         },
         {
-          "value": 1.1484e6,
+          "value": 1148400,
           "unit": "ns"
         },
         {
-          "value": 919714.0,
+          "value": 919714,
           "unit": "ns"
         }
       ],
       "DeadTimeConstant": {
-        "value": 75.0,
+        "value": 75,
         "unit": "ns"
       },
       "LengthSet": {
-        "value": 55.0,
+        "value": 55,
         "unit": "m"
       },
       "NoiseCut": {
-        "value": 10.0,
+        "value": 10,
         "unit": "amp"
       },
       "DL_cell": {
         "value": 0.019,
         "unit": "m"
       },
-      "CHIDUSE": [3, 4, 5, 6, 7, 8],
+      "CHIDUSE": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
       "EnergyDivide": [
         {
           "value": 0.1,
           "unit": "eV"
         },
         {
-          "value": 1e2,
+          "value": 100,
           "unit": "eV"
         },
         {
-          "value": 5e4,
+          "value": 50000,
           "unit": "eV"
         }
       ],
       "EnergyCut_Low": {
-        "value": 1e4,
+        "value": 10000,
         "unit": "eV"
       },
       "EnergyCut_U8": {
-        "value": 1e6,
+        "value": 1000000,
         "unit": "eV"
       },
       "EnergyCut_High": {
-        "value": 3e8,
+        "value": 300000000,
         "unit": "eV"
       },
       "UFRandomTimes": {
@@ -129,7 +144,7 @@
       "Bin": {
         "bpd": 100,
         "nDec": 10,
-        "LowEdge": -1.0
+        "LowEdge": -1
       },
       "NRebin": {
         "value": 5,
@@ -175,7 +190,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [0.993786, 0.993982, 0.993943],
+        "ThresholdEDivide": [
+          0.993786,
+          0.993982,
+          0.993943
+        ],
         "Length": {
           "value": 55.789445,
           "unit": "m"
@@ -234,7 +253,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [0.988722, 0.988556, 0.988992],
+        "ThresholdEDivide": [
+          0.988722,
+          0.988556,
+          0.988992
+        ],
         "Length": {
           "value": 55.808445,
           "unit": "m"
@@ -293,7 +316,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [1.0, 1.0, 0.994971],
+        "ThresholdEDivide": [
+          1,
+          1,
+          0.994971
+        ],
         "Length": {
           "value": 55.827445,
           "unit": "m"
@@ -329,7 +356,10 @@
             "value": 197,
             "unit": "amp"
           },
-          { "value": 197, "unit": "amp" },
+          {
+            "value": 197,
+            "unit": "amp"
+          },
           {
             "value": 197,
             "unit": "amp"
@@ -349,7 +379,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [1.0, 1.0, 0.987383],
+        "ThresholdEDivide": [
+          1,
+          1,
+          0.987383
+        ],
         "Length": {
           "value": 55.846445,
           "unit": "m"
@@ -408,7 +442,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [1.0, 1.0, 0.990436],
+        "ThresholdEDivide": [
+          1,
+          1,
+          0.990436
+        ],
         "Length": {
           "value": 55.846445,
           "unit": "m"
@@ -467,7 +505,11 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [1.0, 1.0, 0.992248],
+        "ThresholdEDivide": [
+          1,
+          1,
+          0.992248
+        ],
         "Length": {
           "value": 55.884445,
           "unit": "m"
