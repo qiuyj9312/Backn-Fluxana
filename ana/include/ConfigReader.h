@@ -22,6 +22,7 @@ using json = nlohmann::json;
 struct ChannelConfig {
   int DetID;                       ///< Detector ID
   double Tg;                       ///< Time gate
+  double DeadTimeConstant;         ///< Dead-time constant (tau) in ns
   int Threshold;                   ///< Threshold value
   std::vector<double> ThresholdRe; ///< Threshold Re for each energy divide
   std::vector<double>
@@ -54,7 +55,6 @@ struct FIXMGlobalConfig {
   std::vector<double> ThFindminRange; ///< Threshold find minimum range
   std::vector<double> LCalEn;         ///< Calibration energies
   std::vector<double> LCaldT;         ///< Calibration time differences
-  double DeadTimeConstant;            ///< Dead-time constant (tau) in ns
   double LengthSet;                   ///< Length set
   double NoiseCut;                    ///< Noise cut threshold
   std::vector<int> CHIDUSE;           ///< Channel IDs to use
@@ -66,8 +66,6 @@ struct FIXMGlobalConfig {
   double FPulse;        ///< Pulse frequency (Hz)
 
   std::vector<std::string> T0list; ///< List of T0 files
-  double BeamPower;                ///< Beam power in kW
-  double BeamRadius;               ///< Beam radius in mm
   double EnergyCut_Low;            ///< Low energy cut (eV)
   double EnergyCut_U8;             ///< U8 energy cut (eV)
   double EnergyCut_High;           ///< High energy cut (eV)
@@ -94,6 +92,13 @@ struct AnalysisConfig {
   std::string originDataPath; ///< Path to Origin data directory
   std::string fluxPath;       ///< Path to Flux directory
   std::string beamDataPath;   ///< Path to Beam data directory
+  int experimentTime;         ///< Experiment time in yyyymm format (from
+                              ///< ExperimentCondition)
+  std::string beamMode;    ///< Beam mode (e.g., "SingleBunch", "DoubleBunch")
+  double protonEnergy;     ///< Proton energy in eV
+  double beamPower;        ///< Beam power in kW
+  double beamRadius;       ///< Beam radius in mm
+  double protonCutPercent; ///< Proton cut percentage (fraction, e.g. 0.1)
 
   // U-235 ENDF data files
   std::string endfDataU5NF;   ///< ENDF data file for U-235 neutron fission
@@ -197,6 +202,12 @@ public:
    * @return Beam data path string
    */
   std::string GetBeamDataPath() const;
+
+  /**
+   * @brief Get experiment time (yyyymm format)
+   * @return Experiment time as integer, e.g. 202512
+   */
+  int GetExperimentTime() const;
 
   /**
    * @brief Get file list
@@ -307,10 +318,11 @@ public:
   double GetFPulse() const;
 
   /**
-   * @brief Get dead-time constant (tau) in ns
+   * @brief Get dead-time constant (tau) in ns for a specific channel
+   * @param channelId The ID of the channel
    * @return Dead-time constant in nanoseconds
    */
-  double GetTau() const;
+  double GetTau(int channelId) const;
 
   /**
    * @brief Get DL_cell value
@@ -335,6 +347,24 @@ public:
    * @return Reference to FIXM configuration
    */
   const FIXMConfig &GetFIXMConfig() const;
+
+  /**
+   * @brief Get beam mode (e.g., "SingleBunch", "DoubleBunch")
+   * @return Beam mode string
+   */
+  std::string GetBeamMode() const;
+
+  /**
+   * @brief Get proton energy (eV)
+   * @return Proton energy in eV
+   */
+  double GetProtonEnergy() const;
+
+  /**
+   * @brief Get proton cut percentage (fraction)
+   * @return ProtonCutPercent value (e.g. 0.1)
+   */
+  double GetProtonCutPercent() const;
 
   /**
    * @brief Get beam power (kW)

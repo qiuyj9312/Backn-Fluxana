@@ -87,10 +87,6 @@
           "unit": "ns"
         }
       ],
-      "DeadTimeConstant": {
-        "value": 75,
-        "unit": "ns"
-      },
       "LengthSet": {
         "value": 55,
         "unit": "m"
@@ -103,14 +99,7 @@
         "value": 0.019,
         "unit": "m"
       },
-      "CHIDUSE": [
-        3,
-        4,
-        5,
-        6,
-        7,
-        8
-      ],
+      "CHIDUSE": [3, 4, 5, 6, 7, 8],
       "EnergyDivide": [
         {
           "value": 0.1,
@@ -190,11 +179,7 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [
-          0.993786,
-          0.993982,
-          0.993943
-        ],
+        "ThresholdEDivide": [0.993786, 0.993982, 0.993943],
         "Length": {
           "value": 55.789445,
           "unit": "m"
@@ -213,7 +198,11 @@
           "value": 235,
           "unit": ""
         },
-        "DetEff": 0.9768
+        "DetEff": 0.9768,
+        "DeadTimeConstant": {
+          "value": 75,
+          "unit": "ns"
+        }
       },
       "4": {
         "DetID": 4,
@@ -253,11 +242,7 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [
-          0.988722,
-          0.988556,
-          0.988992
-        ],
+        "ThresholdEDivide": [0.988722, 0.988556, 0.988992],
         "Length": {
           "value": 55.808445,
           "unit": "m"
@@ -276,7 +261,11 @@
           "value": 235,
           "unit": ""
         },
-        "DetEff": 0.9744
+        "DetEff": 0.9744,
+        "DeadTimeConstant": {
+          "value": 75,
+          "unit": "ns"
+        }
       },
       "5": {
         "DetID": 5,
@@ -316,11 +305,7 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [
-          1,
-          1,
-          0.994971
-        ],
+        "ThresholdEDivide": [1, 1, 0.994971],
         "Length": {
           "value": 55.827445,
           "unit": "m"
@@ -339,7 +324,11 @@
           "value": 232,
           "unit": ""
         },
-        "DetEff": 0.9799
+        "DetEff": 0.9799,
+        "DeadTimeConstant": {
+          "value": 75,
+          "unit": "ns"
+        }
       },
       "6": {
         "DetID": 6,
@@ -379,11 +368,7 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [
-          1,
-          1,
-          0.987383
-        ],
+        "ThresholdEDivide": [1, 1, 0.987383],
         "Length": {
           "value": 55.846445,
           "unit": "m"
@@ -402,7 +387,11 @@
           "value": 232,
           "unit": ""
         },
-        "DetEff": 0.9798
+        "DetEff": 0.9798,
+        "DeadTimeConstant": {
+          "value": 75,
+          "unit": "ns"
+        }
       },
       "7": {
         "DetID": 7,
@@ -442,11 +431,7 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [
-          1,
-          1,
-          0.990436
-        ],
+        "ThresholdEDivide": [1, 1, 0.990436],
         "Length": {
           "value": 55.846445,
           "unit": "m"
@@ -465,7 +450,11 @@
           "value": 232,
           "unit": ""
         },
-        "DetEff": 0.9811
+        "DetEff": 0.9811,
+        "DeadTimeConstant": {
+          "value": 75,
+          "unit": "ns"
+        }
       },
       "8": {
         "DetID": 8,
@@ -505,11 +494,7 @@
             "unit": "amp"
           }
         ],
-        "ThresholdEDivide": [
-          1,
-          1,
-          0.992248
-        ],
+        "ThresholdEDivide": [1, 1, 0.992248],
         "Length": {
           "value": 55.884445,
           "unit": "m"
@@ -528,7 +513,11 @@
           "value": 232,
           "unit": ""
         },
-        "DetEff": 0.9806
+        "DetEff": 0.9806,
+        "DeadTimeConstant": {
+          "value": 75,
+          "unit": "ns"
+        }
       }
     }
   },

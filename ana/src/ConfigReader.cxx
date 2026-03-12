@@ -258,15 +258,6 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
     if (globalJson.contains("LCaldT")) {
       fixmConfig.Global.LCaldT = getValueVector(globalJson["LCaldT"]);
     }
-    if (globalJson.contains("DeadTimeConstant")) {
-      fixmConfig.Global.DeadTimeConstant =
-          getValue(globalJson["DeadTimeConstant"]);
-    } else {
-      // Default value if not specified
-      fixmConfig.Global.DeadTimeConstant = 50.0;
-      std::cout << "Warning: DeadTimeConstant not found, using default: 50.0 ns"
-                << std::endl;
-    }
     if (globalJson.contains("LengthSet")) {
       fixmConfig.Global.LengthSet = getValue(globalJson["LengthSet"]);
     }
@@ -326,21 +317,6 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
       std::cout << "Warning: UFRandomTimes not found, using default: 10.0"
                 << std::endl;
     }
-    if (globalJson.contains("BeamPower")) {
-      fixmConfig.Global.BeamPower = getValue(globalJson["BeamPower"]);
-    } else {
-      fixmConfig.Global.BeamPower = 95.0; // Default value
-      std::cout << "Warning: BeamPower not found, using default: 95.0 kW"
-                << std::endl;
-    }
-    if (globalJson.contains("BeamRadius")) {
-      fixmConfig.Global.BeamRadius = getValue(globalJson["BeamRadius"]);
-    } else {
-      fixmConfig.Global.BeamRadius = 30.0; // Default value
-      std::cout << "Warning: BeamRadius not found, using default: 30.0 mm"
-                << std::endl;
-    }
-
     if (globalJson.contains("EnergyCut_Low")) {
       fixmConfig.Global.EnergyCut_Low = getValue(globalJson["EnergyCut_Low"]);
     } else {
@@ -372,6 +348,15 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
       ChannelConfig chConfig;
       chConfig.DetID = channelJson["DetID"].get<int>();
       chConfig.Tg = getValue(channelJson["Tg"]);
+      
+      if (channelJson.contains("DeadTimeConstant")) {
+        chConfig.DeadTimeConstant = getValue(channelJson["DeadTimeConstant"]);
+      } else {
+        chConfig.DeadTimeConstant = 80.0;
+        std::cout << "Warning: DeadTimeConstant not found near channel " << channelId 
+                  << ", using default: 80.0 ns" << std::endl;
+      }
+
       chConfig.Threshold = getValue(channelJson["Threshold"]);
 
       // Parse ThresholdRe array
@@ -431,6 +416,89 @@ bool ConfigReader::LoadExperimentConfig(const std::string &configPath) {
         << std::endl;
     m_config.fPulse = 0.0;
     m_config.fixmConfig.Global.FPulse = 0.0;
+  }
+
+  // Extract ExperimentTime from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("ExperimentTime") &&
+      expJson["ExperimentCondition"]["ExperimentTime"].contains("value")) {
+    m_config.experimentTime =
+        expJson["ExperimentCondition"]["ExperimentTime"]["value"].get<int>();
+    std::cout << "Experiment time: " << m_config.experimentTime << " (yyyymm)"
+              << std::endl;
+  } else {
+    std::cerr << "Warning: ExperimentTime not found in ExperimentCondition, "
+                 "setting to 0"
+              << std::endl;
+    m_config.experimentTime = 0;
+  }
+
+  // Extract BeamMode from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("BeamMode")) {
+    m_config.beamMode =
+        expJson["ExperimentCondition"]["BeamMode"].get<std::string>();
+    std::cout << "Beam mode: " << m_config.beamMode << std::endl;
+  } else {
+    m_config.beamMode = "SingleBunch";
+    std::cout << "Warning: BeamMode not found, using default: SingleBunch"
+              << std::endl;
+  }
+
+  // Extract ProtonEnergy from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("ProtonEnergy") &&
+      expJson["ExperimentCondition"]["ProtonEnergy"].contains("value")) {
+    m_config.protonEnergy =
+        expJson["ExperimentCondition"]["ProtonEnergy"]["value"].get<double>();
+    std::cout << "Proton energy: " << m_config.protonEnergy << " eV"
+              << std::endl;
+  } else {
+    m_config.protonEnergy = 0.0;
+    std::cout << "Warning: ProtonEnergy not found, setting to 0" << std::endl;
+  }
+
+  // Extract BeamPower from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("BeamPower") &&
+      expJson["ExperimentCondition"]["BeamPower"].contains("value")) {
+    m_config.beamPower =
+        expJson["ExperimentCondition"]["BeamPower"]["value"].get<double>();
+    std::cout << "Beam power: " << m_config.beamPower << " kW" << std::endl;
+  } else {
+    m_config.beamPower = 95.0;
+    std::cout << "Warning: BeamPower not found in ExperimentCondition, using "
+                 "default: 95.0 kW"
+              << std::endl;
+  }
+
+  // Extract BeamRadius from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("BeamRadius") &&
+      expJson["ExperimentCondition"]["BeamRadius"].contains("value")) {
+    m_config.beamRadius =
+        expJson["ExperimentCondition"]["BeamRadius"]["value"].get<double>();
+    std::cout << "Beam radius: " << m_config.beamRadius << " mm" << std::endl;
+  } else {
+    m_config.beamRadius = 30.0;
+    std::cout << "Warning: BeamRadius not found in ExperimentCondition, using "
+                 "default: 30.0 mm"
+              << std::endl;
+  }
+
+  // Extract ProtonCutPercent from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("ProtonCutPercent") &&
+      expJson["ExperimentCondition"]["ProtonCutPercent"].contains("value")) {
+    m_config.protonCutPercent =
+        expJson["ExperimentCondition"]["ProtonCutPercent"]["value"]
+            .get<double>();
+    std::cout << "Proton cut percent: " << m_config.protonCutPercent
+              << std::endl;
+  } else {
+    m_config.protonCutPercent = 0.1; // Default 10%
+    std::cout << "Warning: ProtonCutPercent not found, using default: 0.1"
+              << std::endl;
   }
 
   // Extract tree names from Files section
@@ -550,6 +618,8 @@ std::string ConfigReader::GetBeamDataPath() const {
   return m_config.beamDataPath;
 }
 
+int ConfigReader::GetExperimentTime() const { return m_config.experimentTime; }
+
 const std::vector<std::string> &ConfigReader::GetFileList() const {
   return m_config.fileList;
 }
@@ -610,8 +680,13 @@ const std::vector<double> &ConfigReader::GetTimeList() const {
 
 double ConfigReader::GetFPulse() const { return m_config.fPulse; }
 
-double ConfigReader::GetTau() const {
-  return m_config.fixmConfig.Global.DeadTimeConstant;
+double ConfigReader::GetTau(int channelId) const {
+  auto it = m_config.fixmConfig.Channels.find(channelId);
+  if (it != m_config.fixmConfig.Channels.end()) {
+    return it->second.DeadTimeConstant;
+  }
+  std::cerr << "Warning: Channel " << channelId << " not found, using default tau 80.0 ns" << std::endl;
+  return 80.0;
 }
 
 double ConfigReader::GetDL_cell() const {
@@ -628,13 +703,17 @@ const FIXMConfig &ConfigReader::GetFIXMConfig() const {
   return m_config.fixmConfig;
 }
 
-double ConfigReader::GetBeamPower() const {
-  return m_config.fixmConfig.Global.BeamPower;
+std::string ConfigReader::GetBeamMode() const { return m_config.beamMode; }
+
+double ConfigReader::GetProtonEnergy() const { return m_config.protonEnergy; }
+
+double ConfigReader::GetProtonCutPercent() const {
+  return m_config.protonCutPercent;
 }
 
-double ConfigReader::GetBeamRadius() const {
-  return m_config.fixmConfig.Global.BeamRadius;
-}
+double ConfigReader::GetBeamPower() const { return m_config.beamPower; }
+
+double ConfigReader::GetBeamRadius() const { return m_config.beamRadius; }
 
 double ConfigReader::GetEnergyCutLow() const {
   return m_config.fixmConfig.Global.EnergyCut_Low;
