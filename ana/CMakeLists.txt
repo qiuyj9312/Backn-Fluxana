@@ -87,6 +87,18 @@ if(NLOHMANN_JSON_INCLUDE_DIR)
     
     message(STATUS "Building rdataframe_analysis: YES")
     message(STATUS "nlohmann/json include: ${NLOHMANN_JSON_INCLUDE_DIR}")
+
+    add_executable(DemoUnfolding
+        DemoUnfolding.cpp
+        src/DoubleBunchUnfolder.cxx
+        src/ConfigReader.cxx
+    )
+    target_link_libraries(DemoUnfolding ${ROOT_LIBRARIES})
+    set_target_properties(DemoUnfolding PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    message(STATUS "Building DemoUnfolding: YES")
+
 else()
     message(STATUS "Building rdataframe_analysis: NO (nlohmann/json not found)")
 endif()
