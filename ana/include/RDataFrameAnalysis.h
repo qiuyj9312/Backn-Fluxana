@@ -17,6 +17,7 @@
 
 // Forward declarations
 class TCutG;
+class TH1D;
 
 /**
  * @brief RDataFrame analysis class
@@ -120,10 +121,12 @@ protected:
   void GetDtForCalL();
   void CalFlightPath();
   void GetPileupCorr();
-  void CoincheckSimple();
-  void CoincheckSingleBunchSimple();
+  void CoincheckSingleBunch();
+  void CoincheckDoubleBunch();
+  void Coincheck();
   void CountT0();
   void GetHRateXSUF();
+  void EvalDeltaTc1();
 
   /**
    * @brief 计算不确定度(纯虚函数)
@@ -158,7 +161,13 @@ protected:
    * @brief 加载 ENDF 截面数据
    * @return true on success, false on failure
    */
-  bool LoadENDFData();
+  bool LoadSTDENDFData();
+
+  /**
+   * @brief 加载实验样品 ENDF 截面数据
+   * @return true on success, false on failure
+   */
+  virtual bool LoadXSENDFData();
 
   // 输出辅助方法
   /**
@@ -285,6 +294,12 @@ protected:
   // ENDF 截面数据缓存
   std::map<std::string, TGraph *> m_xs_nr;   ///< Reaction cross section data
   std::map<std::string, TGraph *> m_xs_ntot; ///< Total cross section data
+  std::map<std::string, TH1D *>
+      m_hxs_nr; ///< Reaction cross section data in TH1D
+
+  // Delta L 缓存
+  std::shared_ptr<TGraph> m_endeltaL; ///< Delta L graph
+  double m_avgDL{0.0};                ///< Average Delta L
 
   // 常用字符串常量
   static constexpr const char *SEPARATOR =

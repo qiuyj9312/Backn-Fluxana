@@ -11,10 +11,12 @@
 #include "TH1D.h"
 #include "TLegend.h"
 #include "TMultiGraph.h"
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <vector>
 
 // 颜色数组
 EColor color[] = {kRed,    kBlue, kBlack,  kGreen,  kYellow, kMagenta, kCyan,
@@ -51,6 +53,129 @@ int load_graph(const char *filename, TGraph *graph_, double times = 1.) {
     graph_->AddPoint(En, XS);
   }
   return 1;
+}
+
+// 从CSV文件读取实验数据并计算总误差
+int load_csv_data(const char *filename, TGraphErrors *graph_) {
+  std::ifstream fin_csv(filename);
+  if (!fin_csv.is_open()) {
+    std::cerr << "无法打开CSV文件: " << filename << std::endl;
+    return -1;
+  }
+
+  std::string header;
+  std::getline(fin_csv, header);
+
+  // 解析表头,找到各列的位置
+  std::stringstream header_ss(header);
+  std::string col_name;
+  std::vector<std::string> col_names;
+
+  while (std::getline(header_ss, col_name, ',')) {
+    col_names.push_back(col_name);
+  }
+
+  // 查找关键列的索引
+  int idx_data = -1, idx_en = -1;
+  int idx_err_s = -1, idx_err_sys = -1, idx_err_t = -1;
+
+  for (size_t i = 0; i < col_names.size(); i++) {
+    if (col_names[i].find("DATA (B)") != std::string::npos) {
+      idx_data = i;
+    } else if (col_names[i].find("EN (EV)") != std::string::npos) {
+      idx_en = i;
+    } else if (col_names[i].find("ERR-S") != std::string::npos) {
+      idx_err_s = i;
+    } else if (col_names[i].find("ERR-SYS") != std::string::npos) {
+      idx_err_sys = i;
+    } else if (col_names[i].find("ERR-T") != std::string::npos) {
+      idx_err_t = i;
+    }
+  }
+
+  if (idx_data < 0 || idx_en < 0) {
+    std::cerr << "错误: 未找到必需的列 (DATA或EN)" << std::endl;
+    fin_csv.close();
+    return -1;
+  }
+
+  int nPoints = 0;
+  std::string line;
+
+  while (std::getline(fin_csv, line)) {
+    if (line.empty())
+      continue;
+
+    std::stringstream ss(line);
+    std::string item;
+    std::vector<std::string> tokens;
+
+    while (std::getline(ss, item, ',')) {
+      tokens.push_back(item);
+    }
+
+    if ((int)tokens.size() <= std::max(idx_data, idx_en))
+      continue;
+
+    try {
+      double xs = std::stod(tokens[idx_data]);
+      double en = std::stod(tokens[idx_en]);
+
+      double total_err = 0.0;
+
+      // 优先使用ERR-T(总误差)
+      if (idx_err_t >= 0 && (int)tokens.size() > idx_err_t &&
+          !tokens[idx_err_t].empty()) {
+        double err_t = std::stod(tokens[idx_err_t]);
+        // 判断是百分比还是绝对值
+        if (col_names[idx_err_t].find("PER-CENT") != std::string::npos) {
+          total_err = xs * err_t / 100.0;
+        } else {
+          total_err = err_t;
+        }
+      } else {
+        // 否则,组合统计和系统误差
+        double err_stat = 0.0, err_sys = 0.0;
+
+        if (idx_err_s >= 0 && (int)tokens.size() > idx_err_s &&
+            !tokens[idx_err_s].empty()) {
+          err_stat = std::stod(tokens[idx_err_s]);
+        }
+
+        if (idx_err_sys >= 0 && (int)tokens.size() > idx_err_sys &&
+            !tokens[idx_err_sys].empty()) {
+          err_sys = std::stod(tokens[idx_err_sys]);
+        }
+
+        // 判断误差格式
+        bool err_s_is_percent =
+            (idx_err_s >= 0 &&
+             col_names[idx_err_s].find("PER-CENT") != std::string::npos);
+        bool err_sys_is_percent =
+            (idx_err_sys >= 0 &&
+             col_names[idx_err_sys].find("PER-CENT") != std::string::npos);
+
+        // 转换为绝对值
+        double abs_err_stat =
+            err_s_is_percent ? (xs * err_stat / 100.0) : err_stat;
+        double abs_err_sys =
+            err_sys_is_percent ? (xs * err_sys / 100.0) : err_sys;
+
+        total_err =
+            std::sqrt(abs_err_stat * abs_err_stat + abs_err_sys * abs_err_sys);
+      }
+
+      graph_->SetPoint(nPoints, en, xs);
+      graph_->SetPointError(nPoints, 0, total_err);
+      nPoints++;
+
+    } catch (const std::exception &e) {
+      continue;
+    }
+  }
+
+  fin_csv.close();
+  return nPoints;
 }
 
 void drawxs() {
@@ -93,7 +218,7 @@ void drawxs() {
     f->Close();
     return;
   }
-
+  hxs->Scale(0.92);
   std::cout << "成功读取 hxs 直方图" << std::endl;
   std::cout << "  - Bins: " << hxs->GetNbinsX() << std::endl;
   std::cout << "  - Entries: " << hxs->GetEntries() << std::endl;
@@ -166,6 +291,75 @@ void drawxs() {
   grExp->SetLineColor(kBlack);
 
   // ========================================
+  // 3.5. 读取CSV格式的实验数据
+  // ========================================
+  const char *csvDataFiles[] = {
+      "/home/qyj/work/XSana/XS/2025_232Th/para/41455013.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/236540022.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/328730022.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/328730032.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/328870022.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/328870032.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/328890022.csv",
+      "/home/qyj/work/XSana/XS/2025_232Th/para/329190022.csv"};
+
+  const char *csvDataNames[] = {
+      "O.Shcherbakov+ 2002",
+      "D.Tarrio+ 2023",
+      "Yu.M.Gledenov+ 2022 (Mono-energetic Neutron Sources)",
+      "Yu.M.Gledenov+ 2022 (White Neutron Sources)",
+      "Yonghao Chen+ 2023 (Relative to ^{1}H(n,1))",
+      "Yonghao Chen+ 2023 (Relative to ^{235}U(n,f))",
+      "Zhizhou Ren+ 2023",
+      "Haofan Bai+ 2024"};
+
+  const int nCSVData = 8;
+
+  TGraphErrors *grCSV[nCSVData];
+  int nSuccessCSV = 0;
+
+  std::cout << "\n========================================" << std::endl;
+  std::cout << "开始读取CSV格式实验数据..." << std::endl;
+
+  for (int i = 0; i < nCSVData; i++) {
+    grCSV[i] = new TGraphErrors();
+    grCSV[i]->SetName(Form("grCSV_%d", i));
+    grCSV[i]->SetTitle(csvDataNames[i]);
+
+    int npts = load_csv_data(csvDataFiles[i], grCSV[i]);
+
+    if (npts < 0) {
+      std::cerr << "Warning: Failed to read " << csvDataFiles[i] << std::endl;
+      delete grCSV[i];
+      grCSV[i] = nullptr;
+    } else {
+      std::cout << "成功读取 " << csvDataNames[i] << " (" << npts << " points)"
+                << std::endl;
+
+      // 设置不同的样式和颜色(避免与grExp的黑色重复)
+      // 使用不同的标记样式和颜色组合
+      const int markerStyles[] = {21, 22, 23, 29,
+                                  33, 34, 47, 43}; // 8种不同的标记
+      const EColor csvColors[] = {kRed,
+                                  kBlue,
+                                  (EColor)(kGreen + 2),
+                                  kMagenta,
+                                  (EColor)(kOrange + 1),
+                                  (EColor)(kCyan + 2),
+                                  kViolet,
+                                  (EColor)(kSpring + 2)};
+
+      grCSV[i]->SetMarkerStyle(markerStyles[i]);
+      grCSV[i]->SetMarkerSize(0.8);
+      grCSV[i]->SetMarkerColor(csvColors[i]);
+      grCSV[i]->SetLineColor(csvColors[i]);
+      nSuccessCSV++;
+    }
+  }
+
+  std::cout << "成功读取 " << nSuccessCSV << " 个CSV数据集" << std::endl;
+
+  // ========================================
   // 4. 读取评价库数据
   // ========================================
   TGraph *grEval[nEvalData];
@@ -208,14 +402,22 @@ void drawxs() {
   mg->SetTitle("^{232}Th(n,f) Cross Section;Neutron Energy (eV);Cross "
                "Section (barn)");
 
-  // 先添加评价库数据（作为背景）
+  // 先添加评价库数据(作为背景)
   for (int i = 0; i < nEvalData; i++) {
     if (grEval[i] != nullptr) {
       mg->Add(grEval[i], "L");
     }
   }
+  std::cout << grEval[1]->Eval(14e6) << "\t" << grExp->Eval(14e6) << std::endl;
 
-  // 最后添加实验数据（在最上层）
+  // 添加CSV实验数据
+  for (int i = 0; i < nCSVData; i++) {
+    if (grCSV[i] != nullptr) {
+      mg->Add(grCSV[i], "PEZ");
+    }
+  }
+
+  // 最后添加实验数据(在最上层)
   mg->Add(grExp, "PEZ");
 
   // 绘制
@@ -228,14 +430,20 @@ void drawxs() {
   // ========================================
   // 6. 创建图例
   // ========================================
-  TLegend *leg = new TLegend(0.65, 0.50, 0.88, 0.88);
+  TLegend *leg = new TLegend(0.12, 0.12, 0.45, 0.88);
   leg->SetFillStyle(0);
   leg->SetBorderSize(1);
-  leg->SetTextSize(0.03);
-  leg->SetHeader("^{232}Th(n,f)", "C");
+  leg->SetTextSize(0.025);
 
   // 添加实验数据到图例
-  leg->AddEntry(grExp, "Experimental Data", "PLE");
+  leg->AddEntry(grExp, "This Work", "PLE");
+
+  // 添加CSV实验数据到图例
+  for (int i = 0; i < nCSVData; i++) {
+    if (grCSV[i] != nullptr) {
+      leg->AddEntry(grCSV[i], csvDataNames[i], "PLE");
+    }
+  }
 
   // 添加评价库数据到图例
   for (int i = 0; i < nEvalData; i++) {
@@ -251,16 +459,6 @@ void drawxs() {
   // ========================================
   c1->Update();
 
-  // 保存为多种格式
-  c1->SaveAs("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSComparison.pdf");
-  c1->SaveAs("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSComparison.png");
-  c1->SaveAs("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSComparison.root");
-
-  std::cout << "========================================" << std::endl;
-  std::cout << "绘图完成！已保存至:" << std::endl;
-  std::cout << "  - XSComparison.pdf" << std::endl;
-  std::cout << "  - XSComparison.png" << std::endl;
-  std::cout << "  - XSComparison.root" << std::endl;
   std::cout << "========================================" << std::endl;
 
   // ========================================
@@ -326,16 +524,8 @@ void drawxs() {
   // 更新画布并保存
   c2->Update();
 
-  // 保存相对误差图
-  c2->SaveAs("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSRelativeError.pdf");
-  c2->SaveAs("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSRelativeError.png");
-  c2->SaveAs("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSRelativeError.root");
-
   std::cout << "\n========================================" << std::endl;
-  std::cout << "相对误差图绘制完成！已保存至:" << std::endl;
-  std::cout << "  - XSRelativeError.pdf" << std::endl;
-  std::cout << "  - XSRelativeError.png" << std::endl;
-  std::cout << "  - XSRelativeError.root" << std::endl;
+  std::cout << "相对误差图绘制完成！" << std::endl;
   std::cout << "========================================" << std::endl;
 
   // 不关闭文件，保持交互

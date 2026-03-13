@@ -788,9 +788,14 @@ class JSONEditorHandler(http.server.SimpleHTTPRequestHandler):
                 # Verify it's valid JSON
                 json_data = json.loads(post_data.decode('utf-8'))
                 
+                # Write with nice formatting
+                json_str = json.dumps(json_data, indent=2, ensure_ascii=False)
+                # Compact primitive lists (numbers, strings)
+                import re
+                json_str = re.sub(r'\[([\d\s.,\-]+)\]', lambda m: '[' + ', '.join(x.strip() for x in m.group(1).split(',')) + ']', json_str)
+                
                 with open(filepath, 'w', encoding='utf-8') as f:
-                    # Write with nice formatting
-                    json.dump(json_data, f, indent=2, ensure_ascii=False)
+                    f.write(json_str)
                     
                 content = json.dumps({"status": "success"}).encode()
                 self.send_response(200)

@@ -48,7 +48,7 @@ void NeutronFluxAnalysis::CalUncertainty() {
   // 获取配置
   const auto &fixmConfig = m_configReader.GetFIXMConfig();
   const auto &channelIDs = fixmConfig.Global.CHIDUSE;
-  std::string outcomePath = m_xsPath + m_expName + "/Outcome/FIXM";
+  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
 
   // 初始化数据结构
   UncertaintyData data;
@@ -80,11 +80,11 @@ void NeutronFluxAnalysis::CalUncertainty() {
 void NeutronFluxAnalysis::LoadRateHistograms(
     UncertaintyData &data, const std::string &outcomePath,
     const std::vector<int> &channelIDs) {
-  std::cout << "Loading rate histograms from hrate.root..." << std::endl;
+  std::cout << "Loading rate histograms from hratepileup.root..." << std::endl;
 
-  auto fin_hrate = TFile::Open(Form("%s/hrate.root", outcomePath.c_str()));
+  auto fin_hrate = TFile::Open(Form("%s/hratepileup.root", outcomePath.c_str()));
   if (!fin_hrate || fin_hrate->IsZombie()) {
-    std::cerr << "Error: Cannot open hrate.root" << std::endl;
+    std::cerr << "Error: Cannot open hratepileup.root" << std::endl;
     return;
   }
 
@@ -185,9 +185,9 @@ void NeutronFluxAnalysis::LoadENDFUncertainty(UncertaintyData &data) {
 
   for (const auto &sampletype : data.sampletype_set) {
     std::string endfFile;
-    if (sampletype == "U5") {
+    if (sampletype == "235U") {
       endfFile = m_configReader.GetUnENDFDataU5NF();
-    } else if (sampletype == "U8") {
+    } else if (sampletype == "238U") {
       endfFile = m_configReader.GetUnENDFDataU8NF();
     } else {
       std::cerr << "Warning: No ENDF uncertainty file for " << sampletype
@@ -366,7 +366,7 @@ void NeutronFluxAnalysis::CalFlux() {
   // 获取配置
   const auto &fixmConfig = m_configReader.GetFIXMConfig();
   const auto &channelIDs = fixmConfig.Global.CHIDUSE;
-  std::string outcomePath = m_xsPath + m_expName + "/Outcome/FIXM";
+  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
   int bpd = fixmConfig.Global.Bin.bpd;
 
   // 获取实验时间
@@ -428,14 +428,15 @@ void NeutronFluxAnalysis::LoadFluxInputData(
   std::cout << "\nLoading flux input data..." << std::endl;
 
   // 打开输入文件
-  auto fhratexs = TFile::Open(Form("%s/hrate.root", outcomePath.c_str()));
+  auto fhratexs = TFile::Open(Form("%s/hratepileup.root", outcomePath.c_str()));
   auto fhratexs_uf =
       TFile::Open(Form("%s/hratexsuf.root", outcomePath.c_str()));
+  std::string paraPath = m_outputPath + m_expName + "/para";
   auto fin_hatten =
-      TFile::Open(Form("%s/fluxattenuation.root", outcomePath.c_str()));
+      TFile::Open(Form("%s/fluxattenuation.root", paraPath.c_str()));
 
   if (!fhratexs || fhratexs->IsZombie()) {
-    std::cerr << "Error: Cannot open hrate.root" << std::endl;
+    std::cerr << "Error: Cannot open hratepileup.root" << std::endl;
     return;
   }
   if (!fhratexs_uf || fhratexs_uf->IsZombie()) {

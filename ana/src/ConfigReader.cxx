@@ -304,6 +304,21 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
       fixmConfig.Global.NRebin = 1;
     }
 
+    if (globalJson.contains("Intergralnsub")) {
+      auto getValue = [](const json &j) -> double {
+        if (j.is_object() && j.contains("value")) {
+          return j["value"].get<double>();
+        }
+        return j.get<double>();
+      };
+      fixmConfig.Global.Intergralnsub =
+          static_cast<int>(getValue(globalJson["Intergralnsub"]));
+    } else {
+      fixmConfig.Global.Intergralnsub = 20; // Default value
+      std::cout << "Warning: Intergralnsub not found, using default: 20"
+                << std::endl;
+    }
+
     if (globalJson.contains("UFRandomTimes")) {
       auto getValue = [](const json &j) -> double {
         if (j.is_object() && j.contains("value")) {
@@ -725,6 +740,10 @@ double ConfigReader::GetEnergyCutU8() const {
 
 double ConfigReader::GetEnergyCutHigh() const {
   return m_config.fixmConfig.Global.EnergyCut_High;
+}
+
+int ConfigReader::GetIntergralnsub() const {
+  return m_config.fixmConfig.Global.Intergralnsub;
 }
 
 bool ConfigReader::IsValid() const { return m_isValid; }

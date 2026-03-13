@@ -62,6 +62,7 @@ struct FIXMGlobalConfig {
   double DL_cell;                     ///< DL_cell value (m)
   BinConfig Bin;        ///< Bin configuration for energy histogram
   int NRebin;           ///< Rebin factor for histograms
+  int Intergralnsub;    ///< Integral nsub points
   double UFRandomTimes; ///< Monte Carlo sampling factor for UF analysis
   double FPulse;        ///< Pulse frequency (Hz)
 
@@ -392,6 +393,11 @@ public:
    * @brief Get high energy cut (eV)
    */
   double GetEnergyCutHigh() const;
+
+  /**
+   * @brief Get integral nsub
+   */
+  int GetIntergralnsub() const;
 
   /**
    * @brief Check if configuration is valid

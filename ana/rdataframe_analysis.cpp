@@ -34,26 +34,10 @@ int main(int argc, char **argv) {
   for (int i = 1; i < theApp.Argc(); ++i) {
     std::string arg = theApp.Argv(i);
     if (arg == "--help" || arg == "-h") {
-      std::cout << "Usage: " << argv[0] << " [analysis_type]" << std::endl;
-      std::cout << std::endl;
-      std::cout << "Arguments:" << std::endl;
-      std::cout << "  analysis_type  Type of analysis to run (default: GetThR1)"
+      std::cout << "Usage: " << argv[0] << " <analysis_type>" << std::endl;
+      std::cout << "Use scripts/run_analysis.py for interactive help and full "
+                   "type list."
                 << std::endl;
-      std::cout << std::endl;
-      std::cout << "Available analysis types:" << std::endl;
-      std::cout << "  - GetGammaFlash" << std::endl;
-      std::cout << "  - GetThR1" << std::endl;
-      std::cout << "  - GetPileupCorr" << std::endl;
-      std::cout << "  - CountT0" << std::endl;
-      std::cout << "  - CalFlux" << std::endl;
-      std::cout << "  - CalUncertainty" << std::endl;
-      std::cout << "  - AnalyzeWithRDataFrame" << std::endl;
-      std::cout << std::endl;
-      std::cout << "Examples:" << std::endl;
-      std::cout << "  " << argv[0] << std::endl;
-      std::cout << "  " << argv[0] << " GetGammaFlash" << std::endl;
-      std::cout << "  " << argv[0] << " GetThR1" << std::endl;
-      std::cout << "  " << argv[0] << " AnalyzeWithRDataFrame" << std::endl;
       return 0;
     } else {
       analysisType = arg;
@@ -87,25 +71,17 @@ int main(int argc, char **argv) {
 
   bool success = false;
 
-  // 截面分析类型列表
-  std::vector<std::string> xsAnalysisTypes = {"GetXSSingleBunch"};
+  // 根据 DataType 选择分析类
+  const std::string &dataType = configReader.GetDataType();
+  std::cout << "DataType: " << dataType << std::endl;
 
-  // 检查是否为截面分析
-  bool isCrossSectionAnalysis = false;
-  for (const auto &type : xsAnalysisTypes) {
-    if (analysisType == type) {
-      isCrossSectionAnalysis = true;
-      break;
-    }
-  }
-
-  if (isCrossSectionAnalysis) {
+  if (dataType == "XS") {
     // 使用截面分析类
     std::cout << "Using CrossSectionAnalysis class..." << std::endl;
     CrossSectionAnalysis analysis(configReader);
     success = analysis.RunAnalysis(analysisType);
   } else {
-    // 使用中子通量分析类 (包含所有其他分析类型)
+    // 使用中子通量分析类 (Flux 及其他)
     std::cout << "Using NeutronFluxAnalysis class..." << std::endl;
     NeutronFluxAnalysis analysis(configReader);
     success = analysis.RunAnalysis(analysisType);

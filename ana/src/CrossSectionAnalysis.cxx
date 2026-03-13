@@ -13,6 +13,7 @@
 #include "TLegend.h"
 #include "TMath.h"
 #include "utils.h"
+#include <algorithm>
 #include <iostream>
 #include <memory>
 
@@ -69,9 +70,9 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
   std::map<int, std::string> m_samplename;
   std::map<int, TH1D *> m_hrate;
 
-  // Load hrate.root file
-  std::string outcomePath = m_xsPath + m_expName + "/Outcome";
-  std::string hratePath = outcomePath + "/hrate.root";
+  // Load hratepileup.root file
+  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
+  std::string hratePath = outcomePath + "/hratepileup.root";
   std::cout << "Opening hrate file: " << hratePath << std::endl;
 
   std::unique_ptr<TFile> fin_hrate(TFile::Open(hratePath.c_str()));
@@ -82,23 +83,12 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
 
   // Load flux attenuation file
   std::string fluxattenPath =
-      m_xsPath + m_expName + "/para/fluxattenuation.root";
+      m_outputPath + m_expName + "/para/fluxattenuation.root";
   std::cout << "Opening flux attenuation file: " << fluxattenPath << std::endl;
-  // load pileup correction file
-  std::string pileupcorrPath = m_xsPath + m_expName + "/para/pileup_corr.root";
-  std::cout << "Opening pileup correction file: " << pileupcorrPath
-            << std::endl;
 
   std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
   if (!fin_hatten || fin_hatten->IsZombie()) {
     std::cerr << "Error: Cannot open " << fluxattenPath << std::endl;
-    return;
-  }
-
-  // load pileup correction file
-  std::unique_ptr<TFile> fin_pileupcorr(TFile::Open(pileupcorrPath.c_str()));
-  if (!fin_pileupcorr || fin_pileupcorr->IsZombie()) {
-    std::cerr << "Error: Cannot open " << pileupcorrPath << std::endl;
     return;
   }
 
@@ -133,13 +123,11 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
                      sample_area, nd)
               << std::endl;
 
-    // Get histograms from hrate.root
+    // Get histograms from hratepileup.root
     TH1D *horiginin = nullptr;
     fin_hrate->GetObject(Form("h1_En_%d", chID), horiginin);
     TH1D *hatten = nullptr;
     fin_hatten->GetObject(Form("htrans%d", m_detID[chID]), hatten);
-    TH1D *hpileupcorr = nullptr;
-    fin_pileupcorr->GetObject(Form("h_corr_%d", chID), hpileupcorr);
 
     if (horiginin != nullptr) {
       // Clone to avoid modifying the file's histogram
@@ -151,12 +139,9 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
       if (hatten != nullptr) {
         h->Divide(hatten);
       }
-      if (hpileupcorr != nullptr) {
-        h->Multiply(hpileupcorr);
-      }
       m_hrate[chID] = h;
     } else {
-      std::cerr << Form("Warning: No histogram for channel %d in hrate.root",
+      std::cerr << Form("Warning: No histogram for channel %d in hratepileup.root",
                         chID)
                 << std::endl;
     }
@@ -321,6 +306,59 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
   std::cout << "Close plot windows to continue..." << std::endl;
   std::cout << "Press Ctrl+C in terminal to exit..." << std::endl;
   std::cout << std::endl;
+}
+
+bool CrossSectionAnalysis::LoadXSENDFData() {
+  if (m_nbins <= 0 || m_EnBins.empty()) {
+    std::cerr << "Warning: Energy bins not initialized. Cannot create TH1D for "
+                 "cross sections. Please call InitializeEnergyBins() first."
+              << std::endl;
+    return false;
+  }
+
+  std::vector<std::string> loadedSampleTypes;
+
+  for (const auto &[chID, chConfig] : m_fixmConfig->Channels) {
+    std::string sampleType = chConfig.SampleType;
+
+    // Skip if already loaded
+    if (std::find(loadedSampleTypes.begin(), loadedSampleTypes.end(),
+                  sampleType) != loadedSampleTypes.end()) {
+      continue;
+    }
+
+    std::string filepath = m_outputPath + m_expName + "/para/XSData/" +
+                           sampleType + "/ENDFB-VIII.1.txt";
+    auto gENDF = new TGraph();
+    get_graph(filepath.c_str(), gENDF, MeV_to_eV);
+
+    if (gENDF->GetN() > 0) {
+      m_xs_nr[sampleType] = gENDF;
+
+      std::string hname = "hxs_nr_" + sampleType;
+      TH1D *h =
+          new TH1D(hname.c_str(), sampleType.c_str(), m_nbins, m_EnBins.data());
+      h->SetDirectory(nullptr); // Ensure histogram persists beyond current
+                                // directory closing
+      for (int i = 1; i <= m_nbins; i++) {
+        h->SetBinContent(i, gENDF->Eval(h->GetBinCenter(i)));
+      }
+      m_hxs_nr[sampleType] = h;
+      loadedSampleTypes.push_back(sampleType);
+
+      std::cout << "Loaded ENDF data for sample: " << sampleType << " from "
+                << filepath << std::endl;
+    } else {
+      delete gENDF;
+      std::cerr << "Warning: Failed to load or empty ENDF data from "
+                << filepath << std::endl;
+    }
+  }
+
+  std::cout << "Converted sample reaction cross section TGraphs to TH1D."
+            << std::endl;
+
+  return true;
 }
 
 void CrossSectionAnalysis::CalUncertainty() {

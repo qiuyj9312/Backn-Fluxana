@@ -44,6 +44,12 @@ public:
   void GetXSSingleBunch();
 
   /**
+   * @brief 加载实验样品 ENDF 截面数据
+   * @return true on success, false on failure
+   */
+  bool LoadXSENDFData() override;
+
+  /**
    * @brief 计算截面测量不确定度
    *
    * 实现基类纯虚函数,计算截面测量的不确定度。
