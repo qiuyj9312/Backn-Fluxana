@@ -28,8 +28,9 @@
 #include <sstream>
 
 constexpr double Na = 6.02214076e23;
-constexpr double cspeed = 0.29979;       // speed of light: m/ns
-constexpr double Mneutron = 939.5654133; // mass of neutron: MeV
+constexpr double cspeed = 0.29979;           // speed of light: m/ns
+constexpr double Mneutron = 939.5654133;     // mass of neutron: MeV
+constexpr double echarge = 1.6021766208e-19; // elementary charge: C
 
 // Unit conversion factors
 constexpr double mm_to_cm = 0.1;
@@ -213,8 +214,17 @@ inline int get_graph(const char *filename, TGraph *graph_, double times = 1.,
  * @return {*}
  */
 inline int graph2hist(TGraph *gr, TH1 *h1, TString opts = "") {
+  if (!gr || gr->GetN() == 0) return 0;
+  
+  double xmin = *std::min_element(gr->GetX(), gr->GetX() + gr->GetN());
+  double xmax = *std::max_element(gr->GetX(), gr->GetX() + gr->GetN());
+
   for (size_t i = 0; i < h1->GetNbinsX(); i++) {
     auto x = h1->GetBinCenter(i + 1);
+    if (x < xmin || x > xmax) {
+      h1->SetBinContent(i + 1, 0);
+      continue;
+    }
     auto y = gr->Eval(x, nullptr, opts);
     if (y < 0) {
       y = 0;
