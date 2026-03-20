@@ -1,6 +1,7 @@
 {
-  "ExpName": "202512_Flux",
-  "DataTyp": "Flux",
+  "ExpName": "2026_FL",
+  "DataType": "Flux",
+  "DetectorType": "FIXM",
   "ParaPath": "/home/qyj/work/XSana/Para/",
   "OriginData": "/home/qyj/work/XSana/Data/OriginData/",
   "RootData": "/home/qyj/work/XSana/Data/RootData/",

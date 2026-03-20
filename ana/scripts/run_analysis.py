@@ -15,9 +15,10 @@ from typing import Optional, Dict, List
 # 分析类型按 DataType 分组
 # DataType 对应 filepath.json 中的 DataType 字段，决定使用哪个分析类
 ANALYSIS_GROUPS = {
-    "Flux": {
-        "desc": "中子通量分析 (NeutronFluxAnalysis)",
+    "PreProcessing": {
+        "desc": "预处理分析 (RDataFrameAnalysis)",
         "types": {
+            "AnalyzeWithRDataFrame":      "完整 RDataFrame 分析",
             "CountT0":                    "T0 计数",
             "GetGammaFlash":              "Gamma 闪光时间拟合",
             "GetThR1":                    "阈值分析 R1（能量 vs 幅度）",
@@ -25,13 +26,17 @@ ANALYSIS_GROUPS = {
             "CalFlightPath":              "飞行路径长度计算",
             "GetThR2":                    "阈值分析 R2（指数拟合）",
             "GetReactionRate":            "反应率直方图",
-            "EvalDeltaTc1":               "评估相邻fTc1差值",
+            "EvalDeltaTc1":               "评估相邻事件差值",
             "GetPileupCorr":              "堆积修正",
             "GetHRateXSUF":               "解谱后反应率",
             "Coincheck":                  "符合检查",
+        }
+    },
+    "Flux": {
+        "desc": "中子通量分析 (NeutronFluxAnalysis)",
+        "types": {
             "CalFlux":                    "中子通量计算",
             "CalUncertainty":             "通量不确定度计算",
-            "AnalyzeWithRDataFrame":      "完整 RDataFrame 分析",
         }
     },
     "XS": {

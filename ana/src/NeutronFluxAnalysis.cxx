@@ -82,7 +82,8 @@ void NeutronFluxAnalysis::LoadRateHistograms(
     const std::vector<int> &channelIDs) {
   std::cout << "Loading rate histograms from hratepileup.root..." << std::endl;
 
-  auto fin_hrate = TFile::Open(Form("%s/hratepileup.root", outcomePath.c_str()));
+  auto fin_hrate =
+      TFile::Open(Form("%s/hratepileup.root", outcomePath.c_str()));
   if (!fin_hrate || fin_hrate->IsZombie()) {
     std::cerr << "Error: Cannot open hratepileup.root" << std::endl;
     return;
@@ -284,33 +285,6 @@ void NeutronFluxAnalysis::WriteResults(const UncertaintyData &data,
   fout->Close();
   std::cout << "Results written to: " << outcomePath << "/herror.root"
             << std::endl;
-
-  // 写入文本文件
-  std::cout << "\nWriting text files..." << std::endl;
-  for (const auto &sampletype : data.sampletype_set) {
-    auto h = data.tot_hrate.at(sampletype);
-    auto herror = data.tot_error.at(sampletype);
-
-    std::ofstream ofs(
-        Form("%s/%s.dat", outcomePath.c_str(), sampletype.Data()));
-    ofs << "Energy(MeV)\tdN/dlogE(neutrons/cm2/s)\tUncertainty(neutrons/cm2/"
-           "s)\t"
-           "Relative_Uncertainty(%)"
-        << std::endl;
-
-    for (int i = 0; i < h->GetNbinsX(); i++) {
-      double En = h->GetBinCenter(i + 1) * eV_to_MeV;
-      double Flux = h->GetBinContent(i + 1);
-      double error = herror->GetBinContent(i + 1);
-      double rel_error = (Flux > 0) ? (error / Flux * 100) : 0;
-
-      ofs << En << "\t" << Flux << "\t" << error * Flux << "\t" << rel_error
-          << std::endl;
-    }
-    ofs.close();
-    std::cout << "  Written: " << outcomePath << "/" << sampletype << ".dat"
-              << std::endl;
-  }
 }
 
 void NeutronFluxAnalysis::DrawUncertaintyPlots(const UncertaintyData &data) {
@@ -389,7 +363,10 @@ void NeutronFluxAnalysis::CalFlux() {
   double effectiveArea = r_eff * r_eff * TMath::Pi();
   std::cout << "Effective area: " << effectiveArea << " cm^2" << std::endl;
 
-  // 初始化数据结构
+  // ============================================================
+  // FIXM 通量计算流程
+  // ============================================================
+  std::cout << "\n--- FIXM Flux Calculation ---" << std::endl;
   FluxData data;
   for (const auto &[chID, chConfig] : fixmConfig.Channels) {
     TString sampletype = chConfig.SampleType.c_str();
@@ -407,12 +384,42 @@ void NeutronFluxAnalysis::CalFlux() {
     data.nd[chID] = ArealDensity;
   }
 
-  // 执行通量计算流程
   LoadFluxInputData(data, outcomePath, channelIDs);
   CalculateFluxByType(data, channelIDs, expTime, beamPower, effectiveArea, bpd);
   LoadFluxUncertainty(data, outcomePath);
   WriteFluxResults(data, outcomePath);
   DrawFluxPlots(data);
+
+  // ============================================================
+  // LiSi 通量计算流程（Flux 模式专属）
+  // ============================================================
+  if (m_lisiConfig && !m_lisiChannelIDs.empty()) {
+    std::cout << "\n--- LiSi Flux Calculation ---" << std::endl;
+    std::string lisiOutcome = m_lisiOutputPath + "/Outcome";
+    int lisi_bpd = m_lisiConfig->Global.Bin.bpd;
+
+    FluxData lisiData;
+    for (const auto &[chID, chConfig] : m_lisiConfig->Channels) {
+      TString sampletype = chConfig.SampleType.c_str();
+      lisiData.sampletype[chID] = sampletype;
+      lisiData.samplename[chID] = sampletype + Form("%d", chConfig.SampleNumber);
+      lisiData.sampletype_set.insert(sampletype);
+      lisiData.detID[chID] = chConfig.DetID;
+
+      double sample_r = chConfig.Radius * mm_to_cm;
+      double sample_area = sample_r * sample_r * TMath::Pi();
+      double sample_t = chConfig.Mass / sample_area;
+      double ArealDensity = sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g;
+      lisiData.nd[chID] = ArealDensity;
+    }
+
+    LoadLiSiFluxInputData(lisiData, lisiOutcome);
+    CalculateFluxByType(lisiData, m_lisiChannelIDs, expTime, beamPower,
+                        effectiveArea, lisi_bpd);
+    LoadFluxUncertainty(lisiData, lisiOutcome);
+    WriteFluxResults(lisiData, lisiOutcome);
+    DrawFluxPlots(lisiData);
+  }
 
   PrintClosePrompt();
   std::cout << "\nCalFlux analysis completed!" << std::endl;
@@ -425,7 +432,7 @@ void NeutronFluxAnalysis::CalFlux() {
 void NeutronFluxAnalysis::LoadFluxInputData(
     FluxData &data, const std::string &outcomePath,
     const std::vector<int> &channelIDs) {
-  std::cout << "\nLoading flux input data..." << std::endl;
+  std::cout << "\nLoading FIXM flux input data..." << std::endl;
 
   // 打开输入文件
   auto fhratexs = TFile::Open(Form("%s/hratepileup.root", outcomePath.c_str()));
@@ -485,6 +492,73 @@ void NeutronFluxAnalysis::LoadFluxInputData(
     }
   }
 }
+
+void NeutronFluxAnalysis::LoadLiSiFluxInputData(
+    FluxData &data, const std::string &lisiOutcomePath) {
+  std::cout << "\nLoading LiSi flux input data..." << std::endl;
+
+  auto fhratexs =
+      TFile::Open(Form("%s/hratepileup.root", lisiOutcomePath.c_str()));
+  auto fhratexs_uf =
+      TFile::Open(Form("%s/hratexsuf.root", lisiOutcomePath.c_str()));
+
+  if (!fhratexs || fhratexs->IsZombie()) {
+    std::cerr << "Error: Cannot open LiSi hratepileup.root" << std::endl;
+    return;
+  }
+  if (!fhratexs_uf || fhratexs_uf->IsZombie()) {
+    std::cerr << "Error: Cannot open LiSi hratexsuf.root" << std::endl;
+    return;
+  }
+
+  // 加载 Li-6 探测效率（能量相关，来自 filepath.json 的 EFFLiSi 字段）
+  TGraph *geff = new TGraph();
+  const std::string &effFile = m_configReader.GetEffLiSi();
+  if (get_graph(effFile.c_str(), geff) < 0) {
+    std::cerr << "Error: Cannot load LiSi efficiency file: " << effFile
+              << std::endl;
+    delete geff;
+    return;
+  }
+  std::cout << "  Loaded LiSi efficiency from: " << effFile << std::endl;
+
+  // 处理每个 LiSi 通道
+  for (int chid : m_lisiChannelIDs) {
+    TH1D *hratexs{nullptr}, *hratexs_uf{nullptr};
+
+    fhratexs->GetObject(Form("h1_Enxs_%d", chid), hratexs);
+    fhratexs_uf->GetObject(Form("h1_Enxs_%d", chid), hratexs_uf);
+
+    if (hratexs && hratexs_uf) {
+      // 合并低能区和高能区数据（与 FIXM 相同）
+      auto hmerge = (TH1D *)hratexs_uf->Clone(Form("h1_Enxs_m%d", chid));
+      int lowEBin = hmerge->FindBin(m_configReader.GetEnergyCutLow());
+      for (int i = 0; i <= lowEBin; i++) {
+        hmerge->SetBinContent(i + 1, hratexs->GetBinContent(i + 1));
+      }
+
+      // 应用能量相关效率修正（逐 bin 插值）
+      // 与 FIXM 的关键差异：使用 EFFLiSi 文件，不做衰减修正
+      for (int i = 1; i <= hmerge->GetNbinsX(); i++) {
+        double En = hmerge->GetBinCenter(i);
+        double eff = geff->Eval(En);
+        if (eff > 0) {
+          hmerge->SetBinContent(i, hmerge->GetBinContent(i) / eff);
+        } else {
+          hmerge->SetBinContent(i, 0);
+        }
+      }
+
+      data.hratexs[chid] = hmerge;
+      std::cout << "  Loaded and processed LiSi data for channel " << chid
+                << std::endl;
+    } else {
+      std::cerr << "Warning: Missing LiSi data for channel " << chid
+                << std::endl;
+    }
+  }
+}
+
 
 void NeutronFluxAnalysis::CalculateFluxByType(
     FluxData &data, const std::vector<int> &channelIDs, double expTime,

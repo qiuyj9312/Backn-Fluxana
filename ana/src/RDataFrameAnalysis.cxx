@@ -176,12 +176,25 @@ void RDataFrameAnalysis::PrintFooter() {
 void RDataFrameAnalysis::InitializeCommonConfig() {
   m_fixmConfig = &m_configReader.GetFIXMConfig();
   m_channelIDs = m_fixmConfig->Global.CHIDUSE;
+  // m_expName 必须先赋值，路径构造依赖它
+  m_expName = m_configReader.GetExperimentName();
+
   if (m_configReader.GetDataType() == "Flux") {
-    m_outputPath = m_configReader.GetFluxPath();
+    // Flux 模式：按探测器类型分子目录
+    // 路径规则：FluxPath/ExpName/FIXM   FluxPath/ExpName/LiSi
+    std::string base = m_configReader.GetFluxPath() + m_expName + "/";
+    m_fixmOutputPath = base + "FIXM";
+    m_lisiOutputPath = base + "LiSi";
+    // 将完整子目录路径放入 m_outputPath，同时清空 m_expName，
+    // 以兼容现有代码中 m_outputPath + m_expName + "/Outcome" 的写法
+    m_outputPath = m_fixmOutputPath;
+    m_expName = "";
+
+    m_lisiConfig = &m_configReader.GetLiSiConfig();
+    m_lisiChannelIDs = m_lisiConfig->Global.CHIDUSE;
   } else {
     m_outputPath = m_configReader.GetXSPath();
   }
-  m_expName = m_configReader.GetExperimentName();
 
   // Initialize Delta L cache
   if (!m_endeltaL) {
@@ -1452,8 +1465,9 @@ void RDataFrameAnalysis::CoincheckSingleBunch() {
   std::cout << "Opening flux attenuation file: " << fluxattenPath << std::endl;
   std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
   if (!fin_hatten || fin_hatten->IsZombie()) {
-    std::cerr << "Error: Cannot open " << fluxattenPath << std::endl;
-    return;
+    std::cerr << "Warning: Cannot open " << fluxattenPath
+              << ", flux attenuation correction will be skipped." << std::endl;
+    fin_hatten.reset(); // 保持 nullptr 状态，后续 if(hatten) 守卫会跳过修正
   }
 
   // Process each channel: build configuration maps and process histograms
@@ -1528,233 +1542,189 @@ void RDataFrameAnalysis::CoincheckSingleBunch() {
   }
 
   // Write normalized histograms to file
-  std::string hrate_norm_path = outcomePath + "/hrate_norm.root";
-  std::unique_ptr<TFile> fout_hrate_norm(
-      TFile::Open(hrate_norm_path.c_str(), "recreate"));
-  if (fout_hrate_norm && !fout_hrate_norm->IsZombie()) {
-    for (auto &ele_m : m_hrate_norm) {
-      ele_m.second->Write();
-    }
-    fout_hrate_norm->Close();
-    std::cout << "Output file saved: " << hrate_norm_path << std::endl;
+  std::string foutPath = Form("%s/hrate_norm.root", outcomePath.c_str());
+  auto *fout_hrate_norm = new TFile(foutPath.c_str(), "recreate");
+  for (auto &ele_m : m_hrate_norm) {
+    ele_m.second->Write();
+  }
+  fout_hrate_norm->Close();
+  delete fout_hrate_norm;
+  std::cout << "Output file saved: " << foutPath << std::endl;
+
+  // 加载 ENDF 截面数据（与 CoincheckDoubleBunch 对齐）
+  InitializeEnergyBins();
+  if (!LoadSTDENDFData()) {
+    std::cerr << "Error: Failed to load ENDF data" << std::endl;
+    return;
   }
 
-  // Process each sample type
-  for (const auto &sample_typeuse : v_sample_typeuse) {
-    std::cout << "Processing sample type: " << sample_typeuse << std::endl;
+  // Draw — 按样品类型逐一作图
+  TCanvas *c = nullptr;
+  TLegend *legd = nullptr;
 
-    // Canvas 1: Divide by ENDF cross section
-    TCanvas *c1 = new TCanvas;
+  for (const auto &sample_typeuse : v_sample_typeuse) {
+    if (m_hrate_re_norm.empty())
+      continue;
+
+    // Canvas 1: 除以 ENDF 截面后画各通道 + 平均值线
+    c = new TCanvas();
     gPad->SetLogx();
     gPad->SetLogy();
-    auto legd1 = new TLegend;
-
+    legd = new TLegend();
     auto hsum = (TH1D *)m_hrate_re_norm.begin()->second->Clone(
         Form("hsum_%s", sample_typeuse.c_str()));
     hsum->Reset();
     int ihist = 0;
-
     for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse) {
+      if (m_sampletype[chID] != sample_typeuse)
         continue;
-      }
+      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+        continue;
+
       auto h = m_hrate_re_norm[chID];
-      h->SetLineColor(color[ihist]);
-      legd1->AddEntry(h, m_samplename[chID].c_str(), "lf");
+      if (m_hxs_nr.find(m_sampletype[chID]) != m_hxs_nr.end() &&
+          m_hxs_nr[m_sampletype[chID]] != nullptr) {
+        h->Divide(m_hxs_nr[m_sampletype[chID]]);
+      }
+      h->SetLineColor(color[ihist % 10]);
       hsum->Add(h);
-      // Fix: First histogram uses "hist" to initialize canvas, subsequent ones
-      // use "hist same"
-      if (ihist == 0) {
-        h->Draw("hist");
-      } else {
-        h->Draw("hist same");
-      }
       ihist++;
     }
 
-    // Only create and draw havg if we have histograms
-    // Define havg at this scope level so it's accessible in subsequent canvases
-    TH1D *havg = nullptr;
-    if (ihist > 0) {
-      havg = (TH1D *)hsum->Clone(Form("havg_%s", sample_typeuse.c_str()));
-      havg->Scale(1.0 / (double)ihist);
-      legd1->Draw();
-    }
-
-    // Canvas 2: Ratio to average
-    TCanvas *c2 = new TCanvas;
-    gPad->SetLogx();
-    auto legd2 = new TLegend();
-
-    ihist = 0;
-    // Only process Canvas 2 if we have histograms from Canvas 1
-    if (havg != nullptr) {
-      for (int chID : m_channelIDs) {
-        if (m_sampletype[chID] != sample_typeuse) {
-          continue;
-        }
-        auto hratio = (TH1D *)m_hrate_re_norm[chID]->Clone(
-            Form("hratio_%s_%d", sample_typeuse.c_str(), chID));
-        hratio->SetYTitle("Reaction Rate / Average Reaction Rate");
-        hratio->Divide(havg);
-        legd2->AddEntry(hratio, m_samplename[chID].c_str(), "lf");
-        m_hratio[chID] = hratio;
-        // Fix: First histogram uses "hist" to initialize canvas, subsequent
-        // ones use "hist same"
-        if (ihist == 0) {
-          hratio->Draw("hist");
-        } else {
-          hratio->Draw("hist same");
-        }
-        ihist++;
-      }
-      if (ihist > 0) {
-        legd2->Draw();
-      }
-    }
-
-    // Canvas 3: Statistical error
-    TCanvas *c3 = new TCanvas;
-    gPad->SetLogx();
-    auto legd3 = new TLegend();
-    ihist = 0;
-
-    ihist = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse) {
-        continue;
-      }
-      m_herror_rate[chID]->SetLineColor(color[ihist]);
-      // Fix: First histogram uses "hist" to initialize canvas, subsequent ones
-      // use "hist same"
-      if (ihist == 0) {
-        m_herror_rate[chID]->Draw("hist");
-      } else {
-        m_herror_rate[chID]->Draw("hist same");
-      }
-      legd3->AddEntry(m_herror_rate[chID], m_samplename[chID].c_str(), "lf");
-      ihist++;
-    }
-    legd3->Draw();
-
-    // Canvas 4: Decoupled error
-    TCanvas *c4 = new TCanvas;
-    gPad->SetLogx();
-    auto legd4 = new TLegend();
-    ihist = 0;
+    auto havg = (TH1D *)hsum->Clone(Form("havg_%s", sample_typeuse.c_str()));
+    havg->SetLineColor(kBlack);
+    havg->SetLineWidth(2);
+    havg->Draw("hist");
+    legd->AddEntry(havg, "Average", "l");
 
     for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse) {
+      if (m_sampletype[chID] != sample_typeuse)
         continue;
-      }
+      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+        continue;
+      auto h = m_hrate_re_norm[chID];
+      h->DrawCopy("same hist");
+      legd->AddEntry(h, m_samplename[chID].c_str(), "l");
+    }
+    if (ihist > 0)
+      havg->Scale(1. / (double)ihist);
+    legd->Draw();
 
-      auto hrr = (TH1D *)m_hratio[chID]->Clone(Form("hratio_%d", chID));
-      hrr->Reset();
+    // Canvas 2: 各通道 / 平均值（比值）
+    c = new TCanvas();
+    gPad->SetLogx();
+    legd = new TLegend();
+    ihist = 0;
+    for (int chID : m_channelIDs) {
+      if (m_sampletype[chID] != sample_typeuse)
+        continue;
+      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+        continue;
 
-      for (size_t i = 0; i < hrr->GetNbinsX(); i++) {
-        auto bincontent = m_hratio[chID]->GetBinContent(i + 1);
-        if (bincontent <= 0) {
-          continue;
-        }
-        auto bin_un = m_herror_rate[chID]->GetBinContent(i + 1);
-        auto debc = abs(bincontent - 1);
-        Double_t cre = 0.;
-
-        if (debc > bin_un) {
-          cre = sqrt(debc * debc - bin_un * bin_un);
-          if (std::signbit(bincontent - 1)) {
-            cre = -cre;
-          }
-        } else {
-          if (std::signbit(bincontent - 1)) {
-            cre = -debc;
-          }
-        }
-
-        hrr->SetBinContent(i + 1, cre);
-      }
-
-      m_hratio_dec[chID] = hrr;
-      // Fix: First histogram uses "hist" to initialize canvas, subsequent ones
-      // use "hist same"
+      auto hratio = (TH1D *)m_hrate_re_norm[chID]->Clone(
+          Form("hratio_%s_%d", sample_typeuse.c_str(), chID));
+      hratio->SetYTitle("Ratio");
+      hratio->Divide(havg);
+      legd->AddEntry(hratio, m_samplename[chID].c_str(), "l");
+      m_hratio[chID] = hratio;
       if (ihist == 0) {
-        hrr->Draw("hist");
+        hratio->Draw("hist");
       } else {
-        hrr->Draw("hist same");
+        hratio->Draw("hist same");
       }
       ihist++;
-      legd4->AddEntry(hrr, m_samplename[chID].c_str(), "lf");
     }
-    // Only draw legend if we have histograms
-    if (ihist > 0) {
-      legd4->Draw();
-    }
+    legd->Draw();
 
-    // Canvas 5: Coincidence error
-    TCanvas *c5 = new TCanvas;
+    // Canvas 3: 统计误差
+    c = new TCanvas();
+    gPad->SetLogx();
+    legd = new TLegend();
+    ihist = 0;
+    for (int chID : m_channelIDs) {
+      if (m_sampletype[chID] != sample_typeuse)
+        continue;
+      if (m_herror_rate.find(chID) == m_herror_rate.end())
+        continue;
+
+      m_herror_rate[chID]->SetLineColor(color[ihist % 10]);
+      m_herror_rate[chID]->SetYTitle("Error");
+      if (ihist == 0) {
+        m_herror_rate[chID]->DrawCopy("hist");
+      } else {
+        m_herror_rate[chID]->DrawCopy("hist same");
+      }
+      legd->AddEntry(m_herror_rate[chID], m_samplename[chID].c_str(), "l");
+      ihist++;
+    }
+    legd->Draw();
+
+    // Canvas 4: 符合误差（实验标准差，与 CoincheckDoubleBunch 一致）
+    c = new TCanvas();
     gPad->SetLogx();
     auto gerror_coin = new TGraph();
-    TH1D *herror_coin = nullptr;
 
-    // Only process Canvas 5 if we have havg
-    if (havg != nullptr) {
-      for (size_t i = 0; i < havg->GetNbinsX(); i++) {
-        double max_y = -DBL_MAX;
-        double min_y = DBL_MAX;
-        auto x = havg->GetBinCenter(i + 1);
+    int n_channels = 0;
+    for (int chID : m_channelIDs) {
+      if (m_sampletype[chID] == sample_typeuse &&
+          m_hrate_re_norm.find(chID) != m_hrate_re_norm.end())
+        n_channels++;
+    }
 
-        for (int chID : m_channelIDs) {
-          if (m_sampletype[chID] != sample_typeuse) {
-            continue;
-          }
+    for (int i = 0; i < havg->GetNbinsX(); i++) {
+      auto x = havg->GetBinCenter(i + 1);
+      double avg_val = havg->GetBinContent(i + 1);
+      if (avg_val <= 0)
+        continue;
 
-          auto content = m_hratio_dec[chID]->GetBinContent(i + 1);
+      double sum_sq_diff = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+          continue;
 
-          if (max_y < content) {
-            max_y = content;
-          }
-          if (min_y > content) {
-            min_y = content;
-          }
-        }
-
-        auto dec = max_y - min_y;
-        if (dec > 0 && dec < 0.2) {
-          gerror_coin->AddPoint(x, dec);
+        double rate_k = m_hrate_re_norm[chID]->GetBinContent(i + 1);
+        if (rate_k > 0) {
+          double q_k = rate_k / avg_val;
+          sum_sq_diff += (q_k - 1.0) * (q_k - 1.0);
         }
       }
 
-      herror_coin =
-          (TH1D *)havg->Clone(Form("herror_coin_%s", sample_typeuse.c_str()));
-      herror_coin->SetYTitle("Uncertainty");
-      herror_coin->Reset();
-      graph2hist(gerror_coin, herror_coin);
-      herror_coin->Smooth();
-      herror_coin->Draw("hist");
-      herror_coin->SetLineColor(kRed);
-    }
-
-    // Write coincidence efficiency to file (only if we have herror_coin)
-    if (herror_coin != nullptr) {
-      std::string output_dat =
-          outparaPath + "/" + sample_typeuse + "COINEFF.dat";
-      std::ofstream ofs(output_dat);
-      if (ofs.is_open()) {
-        for (size_t i = 0; i < herror_coin->GetNbinsX(); i++) {
-          ofs << herror_coin->GetBinCenter(i + 1) << "\t"
-              << herror_coin->GetBinContent(i + 1) << std::endl;
+      if (n_channels > 1) {
+        double s_qk = std::sqrt(sum_sq_diff / (n_channels - 1));
+        double s_qbar = s_qk / std::sqrt(n_channels);
+        if (s_qbar > 0) {
+          gerror_coin->AddPoint(x, s_qbar);
         }
-        ofs.close();
-        std::cout << "  Saved coincidence efficiency to: " << output_dat
-                  << std::endl;
       }
     }
+
+    auto herror_coin =
+        (TH1D *)havg->Clone(Form("herror_coin_%s", sample_typeuse.c_str()));
+    herror_coin->SetYTitle("Uncertainty");
+    gerror_coin->GetYaxis()->SetTitle("Uncertainty");
+    herror_coin->Reset();
+    graph2hist(gerror_coin, herror_coin);
+    herror_coin->Smooth();
+    herror_coin->Draw("hist");
+    herror_coin->SetLineColor(kRed);
+
+    // 写出符合效率文件（路径与 CoincheckDoubleBunch 对齐：Outcome/UN...）
+    std::string out_dat =
+        Form("%s/UN%sCOINEFF.dat", outcomePath.c_str(), sample_typeuse.c_str());
+    std::ofstream ofs(out_dat);
+    for (int i = 0; i < herror_coin->GetNbinsX(); i++) {
+      ofs << herror_coin->GetBinCenter(i + 1) << "\t"
+          << herror_coin->GetBinContent(i + 1) << std::endl;
+    }
+    ofs.close();
+    std::cout << "  Saved coincidence efficiency to: " << out_dat << std::endl;
+
+    delete gerror_coin;
   }
 
-  std::cout << std::endl;
-  std::cout << "Close plot windows to continue..." << std::endl;
-  std::cout << "Press Ctrl+C in terminal to exit..." << std::endl;
-  std::cout << std::endl;
+  PrintClosePrompt();
 }
 
 void RDataFrameAnalysis::Coincheck() {
@@ -1839,8 +1809,9 @@ void RDataFrameAnalysis::CoincheckDoubleBunch() {
   }
   std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
   if (!fin_hatten || fin_hatten->IsZombie()) {
-    std::cerr << "Error: Cannot open " << fluxattenPath << std::endl;
-    return;
+    std::cerr << "Warning: Cannot open " << fluxattenPath
+              << ", flux attenuation correction will be skipped." << std::endl;
+    fin_hatten.reset(); // 保持 nullptr 状态，后续 if(htrans) 守卫会跳过修正
   }
 
   std::string hratexsufPath = outcomePath + "/hratexsuf.root";

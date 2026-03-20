@@ -90,16 +90,20 @@ struct AnalysisConfig {
   std::string paraPath; ///< Path to Para directory (for parameter files, etc.)
   std::string t0Path;   ///< Path to T0 data directory
   std::string dataType; ///< Data type (XS, Flux, etc.)
+  std::string detectorType;   ///< Detector type (e.g., "FIXM")
   std::string originDataPath; ///< Path to Origin data directory
   std::string fluxPath;       ///< Path to Flux directory
   std::string beamDataPath;   ///< Path to Beam data directory
   int experimentTime;         ///< Experiment time in yyyymm format (from
                               ///< ExperimentCondition)
-  std::string beamMode;    ///< Beam mode (e.g., "SingleBunch", "DoubleBunch")
-  double protonEnergy;     ///< Proton energy in eV
-  double beamPower;        ///< Beam power in kW
-  double beamRadius;       ///< Beam radius in mm
-  double protonCutPercent; ///< Proton cut percentage (fraction, e.g. 0.1)
+  std::string beamMode;   ///< Beam mode (e.g., "SingleBunch", "DoubleBunch")
+  std::string beamConfig; ///< Beam configuration (e.g., "60-30-30")
+  std::string endStation; ///< End station (e.g., "2")
+  double beamWindowCdThickness; ///< Beam window Cd thickness in mm
+  double protonEnergy;          ///< Proton energy in eV
+  double beamPower;             ///< Beam power in kW
+  double beamRadius;            ///< Beam radius in mm
+  double protonCutPercent;      ///< Proton cut percentage (fraction, e.g. 0.1)
 
   // U-235 ENDF data files
   std::string endfDataU5NF;   ///< ENDF data file for U-235 neutron fission
@@ -128,6 +132,7 @@ struct AnalysisConfig {
   std::string rawTreeName;           ///< Raw tree name (e.g., "EventBranch")
   std::string rootTreeName;          ///< Root tree name (e.g., "TTree")
   FIXMConfig fixmConfig;             ///< FIXM configuration
+  FIXMConfig lisiConfig;             ///< LiSi configuration
 };
 
 /**
@@ -185,6 +190,12 @@ public:
    * @return Data type string
    */
   std::string GetDataType() const;
+
+  /**
+   * @brief Get detector type
+   * @return Detector type string
+   */
+  std::string GetDetectorType() const;
 
   /**
    * @brief Get origin data path
@@ -350,6 +361,12 @@ public:
   const FIXMConfig &GetFIXMConfig() const;
 
   /**
+   * @brief Get LiSi configuration
+   * @return Reference to LiSi configuration
+   */
+  const FIXMConfig &GetLiSiConfig() const;
+
+  /**
    * @brief Get beam mode (e.g., "SingleBunch", "DoubleBunch")
    * @return Beam mode string
    */
@@ -372,6 +389,24 @@ public:
    * @return Beam power in kW
    */
   double GetBeamPower() const;
+
+  /**
+   * @brief Get beam configuration
+   * @return Beam configuration string
+   */
+  std::string GetBeamConfig() const;
+
+  /**
+   * @brief Get end station
+   * @return End station string
+   */
+  std::string GetEndStation() const;
+
+  /**
+   * @brief Get beam window Cd thickness (mm)
+   * @return Beam window Cd thickness in mm
+   */
+  double GetBeamWindowCdThickness() const;
 
   /**
    * @brief Get beam radius (mm)

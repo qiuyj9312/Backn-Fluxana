@@ -76,14 +76,23 @@ bool ConfigReader::LoadFilepathConfig(const std::string &configPath) {
   m_config.expName = filepathJson["ExpName"].get<std::string>();
   std::cout << "Experiment name: " << m_config.expName << std::endl;
 
-  // Extract DataTyp
-  if (!filepathJson.contains("DataTyp")) {
-    std::cerr << "Error: 'DataTyp' key not found in filepath.json" << std::endl;
+  // Extract DataType
+  if (!filepathJson.contains("DataType")) {
+    std::cerr << "Error: 'DataType' key not found in filepath.json" << std::endl;
     m_isValid = false;
     return false;
   }
-  m_config.dataType = filepathJson["DataTyp"].get<std::string>();
+  m_config.dataType = filepathJson["DataType"].get<std::string>();
   std::cout << "Data type: " << m_config.dataType << std::endl;
+
+  // Extract DetectorType
+  if (!filepathJson.contains("DetectorType")) {
+    std::cerr << "Error: 'DetectorType' key not found in filepath.json" << std::endl;
+    m_isValid = false;
+    return false;
+  }
+  m_config.detectorType = filepathJson["DetectorType"].get<std::string>();
+  std::cout << "Detector type: " << m_config.detectorType << std::endl;
 
   // Extract OriginData
   if (!filepathJson.contains("OriginData")) {
@@ -460,6 +469,42 @@ bool ConfigReader::LoadExperimentConfig(const std::string &configPath) {
               << std::endl;
   }
 
+  // Extract BeamConfig from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("BeamConfig")) {
+    m_config.beamConfig =
+        expJson["ExperimentCondition"]["BeamConfig"].get<std::string>();
+    std::cout << "Beam config: " << m_config.beamConfig << std::endl;
+  } else {
+    m_config.beamConfig = "";
+    std::cout << "Warning: BeamConfig not found" << std::endl;
+  }
+
+  // Extract EndStation from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("EndStation")) {
+    m_config.endStation =
+        expJson["ExperimentCondition"]["EndStation"].get<std::string>();
+    std::cout << "End station: " << m_config.endStation << std::endl;
+  } else {
+    m_config.endStation = "";
+    std::cout << "Warning: EndStation not found" << std::endl;
+  }
+
+  // Extract BeamWindow Cd thickness from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("BeamWindow") &&
+      expJson["ExperimentCondition"]["BeamWindow"].contains("Cd") &&
+      expJson["ExperimentCondition"]["BeamWindow"]["Cd"].contains("thickness") &&
+      expJson["ExperimentCondition"]["BeamWindow"]["Cd"]["thickness"].contains("value")) {
+    m_config.beamWindowCdThickness =
+        expJson["ExperimentCondition"]["BeamWindow"]["Cd"]["thickness"]["value"].get<double>();
+    std::cout << "Beam window Cd thickness: " << m_config.beamWindowCdThickness << " mm" << std::endl;
+  } else {
+    m_config.beamWindowCdThickness = 0.0;
+    std::cout << "Warning: BeamWindow Cd thickness not found, setting to 0" << std::endl;
+  }
+
   // Extract ProtonEnergy from ExperimentCondition
   if (expJson.contains("ExperimentCondition") &&
       expJson["ExperimentCondition"].contains("ProtonEnergy") &&
@@ -608,6 +653,15 @@ bool ConfigReader::LoadExperimentConfig(const std::string &configPath) {
     }
   }
 
+  // Read LiSi configuration
+  if (expJson.contains("LiSi")) {
+    std::cout << std::endl;
+    std::cout << "Reading LiSi configuration..." << std::endl;
+    if (!ReadFIXMConfig(expJson["LiSi"], m_config.lisiConfig)) {
+      std::cerr << "Warning: Failed to read LiSi configuration" << std::endl;
+    }
+  }
+
   std::cout << std::endl;
   m_isValid = ValidateConfig();
   return m_isValid;
@@ -622,6 +676,8 @@ std::string ConfigReader::GetRootDataPath() const {
 std::string ConfigReader::GetExperimentName() const { return m_config.expName; }
 
 std::string ConfigReader::GetDataType() const { return m_config.dataType; }
+
+std::string ConfigReader::GetDetectorType() const { return m_config.detectorType; }
 
 std::string ConfigReader::GetOriginDataPath() const {
   return m_config.originDataPath;
@@ -718,6 +774,10 @@ const FIXMConfig &ConfigReader::GetFIXMConfig() const {
   return m_config.fixmConfig;
 }
 
+const FIXMConfig &ConfigReader::GetLiSiConfig() const {
+  return m_config.lisiConfig;
+}
+
 std::string ConfigReader::GetBeamMode() const { return m_config.beamMode; }
 
 double ConfigReader::GetProtonEnergy() const { return m_config.protonEnergy; }
@@ -727,6 +787,12 @@ double ConfigReader::GetProtonCutPercent() const {
 }
 
 double ConfigReader::GetBeamPower() const { return m_config.beamPower; }
+
+std::string ConfigReader::GetBeamConfig() const { return m_config.beamConfig; }
+
+std::string ConfigReader::GetEndStation() const { return m_config.endStation; }
+
+double ConfigReader::GetBeamWindowCdThickness() const { return m_config.beamWindowCdThickness; }
 
 double ConfigReader::GetBeamRadius() const { return m_config.beamRadius; }
 

@@ -278,8 +278,13 @@ protected:
   // 常用配置缓存
   const FIXMConfig *m_fixmConfig; ///< FIXM配置引用
   std::vector<int> m_channelIDs;  ///< 通道ID列表
-  std::string m_outputPath;       ///< 输出数据路径
+  std::string m_outputPath;       ///< 当前分析输出数据路径
   std::string m_expName;          ///< 实验名称
+
+  const FIXMConfig *m_lisiConfig{nullptr}; /// LiSi配置引用
+  std::vector<int> m_lisiChannelIDs;       /// LiSi通道ID列表
+  std::string m_fixmOutputPath;            /// FIXM 输出数据路径
+  std::string m_lisiOutputPath;            /// LiSi 输出数据路径
 
   // 能量分箱配置
   int m_bpd;                    ///< Bins per decade

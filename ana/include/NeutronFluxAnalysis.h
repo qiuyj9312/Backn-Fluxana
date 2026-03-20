@@ -116,6 +116,7 @@ private:
 
   void LoadFluxInputData(FluxData &data, const std::string &outcomePath,
                          const std::vector<int> &channelIDs);
+  void LoadLiSiFluxInputData(FluxData &data, const std::string &lisiOutcomePath);
   void CalculateFluxByType(FluxData &data, const std::vector<int> &channelIDs,
                            double expTime, double beamPower,
                            double effectiveArea, int bpd);
