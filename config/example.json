@@ -1,0 +1,1216 @@
+{
+  "ExperimentCondition": {
+    "BeamConfig": "30-30-30",
+    "BeamWindow": {
+      "Cd": {
+        "thickness": {
+          "value": 1,
+          "unit": "mm"
+        }
+      }
+    },
+    "ExperimentTimeStart": {
+      "value": 202112,
+      "unit": "yyyymm"
+    },
+    "ExperimentTimeEnd": {
+      "value": 202201,
+      "unit": "yyyymm"
+    },
+    "BeamMode": "DoubleBunch",
+    "EndStation": "2",
+    "FPulse": {
+      "value": 25,
+      "unit": "Hz"
+    },
+    "ProtonEnergy": {
+      "value": 1600000000,
+      "unit": "eV"
+    },
+    "ProtonCutPercent": {
+      "value": 0.1,
+      "unit": ""
+    },
+    "BeamPower": {
+      "value": 100,
+      "unit": "kW"
+    },
+    "BeamRadius": {
+      "value": 15,
+      "unit": "mm"
+    }
+  },
+  "note": "none",
+  "FIXM": {
+    "Global": {
+      "CHIDUSE": [1, 2, 3, 4, 5, 6, 7, 8],
+      "gammaFitRange": [
+        {
+          "value": -1110,
+          "unit": "ns"
+        },
+        {
+          "value": -1120,
+          "unit": "ns"
+        }
+      ],
+      "ThFindminRange": [
+        {
+          "value": 100,
+          "unit": "amp"
+        },
+        {
+          "value": 300,
+          "unit": "amp"
+        }
+      ],
+      "LCalEn": [
+        {
+          "value": 8.73815,
+          "unit": "eV"
+        },
+        {
+          "value": 12.3357,
+          "unit": "eV"
+        },
+        {
+          "value": 19.2058,
+          "unit": "eV"
+        }
+      ],
+      "LCaldT": [
+        {
+          "value": 1879710,
+          "unit": "ns"
+        },
+        {
+          "value": 1581680,
+          "unit": "ns"
+        },
+        {
+          "value": 1267350,
+          "unit": "ns"
+        }
+      ],
+      "LengthSet": {
+        "value": 77,
+        "unit": "m"
+      },
+      "NoiseCut": {
+        "value": 10,
+        "unit": "amp"
+      },
+      "DL_cell": {
+        "value": 0.019,
+        "unit": "m"
+      },
+      "EnergyDivide": [
+        {
+          "value": 0.1,
+          "unit": "eV"
+        },
+        {
+          "value": 100,
+          "unit": "eV"
+        },
+        {
+          "value": 50000,
+          "unit": "eV"
+        }
+      ],
+      "Intergralnsub": {
+        "value": 1000,
+        "unit": ""
+      },
+      "EnergyCut_Low": {
+        "value": 10000,
+        "unit": "eV"
+      },
+      "EnergyCut_U8": {
+        "value": 1000000,
+        "unit": "eV"
+      },
+      "EnergyCut_High": {
+        "value": 300000000,
+        "unit": "eV"
+      },
+      "UFRandomTimes": {
+        "value": 1,
+        "unit": ""
+      },
+      "Bin": {
+        "bpd": 100,
+        "nDec": 10,
+        "LowEdge": -1
+      },
+      "NRebin": {
+        "value": 5,
+        "unit": ""
+      },
+      "SimFixmNAttentionFolders": [
+        "20260313005125"
+      ]
+    },
+    "Channels": {
+      "1": {
+        "DetID": 1,
+        "Tg": {
+          "value": -1151.375099,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 169,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 175,
+            "unit": "amp"
+          },
+          {
+            "value": 175,
+            "unit": "amp"
+          },
+          {
+            "value": 175,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 230,
+            "unit": "amp"
+          },
+          {
+            "value": 230,
+            "unit": "amp"
+          },
+          {
+            "value": 230,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.992726, 0.992645, 0.992819],
+        "Length": {
+          "value": 76.85389,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 4,
+        "Mass": {
+          "value": 4.223,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9768
+      },
+      "2": {
+        "DetID": 2,
+        "Tg": {
+          "value": -1151.08377,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 189,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 195,
+            "unit": "amp"
+          },
+          {
+            "value": 195,
+            "unit": "amp"
+          },
+          {
+            "value": 195,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 250,
+            "unit": "amp"
+          },
+          {
+            "value": 250,
+            "unit": "amp"
+          },
+          {
+            "value": 250,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.992726, 0.992726, 0.992726],
+        "Length": {
+          "value": 76.87289,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 5.707,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "3": {
+        "DetID": 3,
+        "Tg": {
+          "value": -1147.01753,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 171,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 180,
+            "unit": "amp"
+          },
+          {
+            "value": 180,
+            "unit": "amp"
+          },
+          {
+            "value": 180,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 230,
+            "unit": "amp"
+          },
+          {
+            "value": 230,
+            "unit": "amp"
+          },
+          {
+            "value": 230,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.992726, 0.992726, 0.992726],
+        "Length": {
+          "value": 76.89189,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 5.701,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "4": {
+        "DetID": 4,
+        "Tg": {
+          "value": -1150.591409,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 159,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 165,
+            "unit": "amp"
+          },
+          {
+            "value": 165,
+            "unit": "amp"
+          },
+          {
+            "value": 165,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 230,
+            "unit": "amp"
+          },
+          {
+            "value": 230,
+            "unit": "amp"
+          },
+          {
+            "value": 230,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.987028, 0.987028, 0.987028],
+        "Length": {
+          "value": 76.91089,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 6.319,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "5": {
+        "DetID": 5,
+        "Tg": {
+          "value": -1149.498147,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 157,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 165,
+            "unit": "amp"
+          },
+          {
+            "value": 165,
+            "unit": "amp"
+          },
+          {
+            "value": 165,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 240,
+            "unit": "amp"
+          },
+          {
+            "value": 240,
+            "unit": "amp"
+          },
+          {
+            "value": 240,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 76.92989,
+          "unit": "m"
+        },
+        "SampleType": "238U",
+        "SampleNumber": 1,
+        "Mass": {
+          "value": 4.991,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "6": {
+        "DetID": 6,
+        "Tg": {
+          "value": -1151.531557,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 203,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 200,
+            "unit": "amp"
+          },
+          {
+            "value": 200,
+            "unit": "amp"
+          },
+          {
+            "value": 200,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 250,
+            "unit": "amp"
+          },
+          {
+            "value": 250,
+            "unit": "amp"
+          },
+          {
+            "value": 250,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 76.94889,
+          "unit": "m"
+        },
+        "SampleType": "238U",
+        "SampleNumber": 2,
+        "Mass": {
+          "value": 4.987,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "7": {
+        "DetID": 7,
+        "Tg": {
+          "value": -1154.973784,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 241,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 245,
+            "unit": "amp"
+          },
+          {
+            "value": 245,
+            "unit": "amp"
+          },
+          {
+            "value": 245,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 285,
+            "unit": "amp"
+          },
+          {
+            "value": 285,
+            "unit": "amp"
+          },
+          {
+            "value": 285,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 76.96789,
+          "unit": "m"
+        },
+        "SampleType": "238U",
+        "SampleNumber": 4,
+        "Mass": {
+          "value": 4.684,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "8": {
+        "DetID": 8,
+        "Tg": {
+          "value": -1156.975356,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 120,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 211,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 265,
+            "unit": "amp"
+          },
+          {
+            "value": 265,
+            "unit": "amp"
+          },
+          {
+            "value": 265,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 76.98689,
+          "unit": "m"
+        },
+        "SampleType": "238U",
+        "SampleNumber": 7,
+        "Mass": {
+          "value": 4.794,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      }
+    }
+  },
+  "LISI": {
+    "Global": {
+      "CHIDUSE": [11, 13, 14, 16, 17, 18],
+      "gammaFitRange": [
+        {
+          "value": -1420,
+          "unit": "ns"
+        },
+        {
+          "value": -1320,
+          "unit": "ns"
+        }
+      ],
+      "ThFindminRange": [
+        {
+          "value": 100,
+          "unit": "amp"
+        },
+        {
+          "value": 300,
+          "unit": "amp"
+        }
+      ],
+      "LCalEn": [
+        {
+          "value": 8.73815,
+          "unit": "eV"
+        },
+        {
+          "value": 12.3357,
+          "unit": "eV"
+        },
+        {
+          "value": 19.2058,
+          "unit": "eV"
+        }
+      ],
+      "LCaldT": [
+        {
+          "value": 1365190,
+          "unit": "ns"
+        },
+        {
+          "value": 1148710,
+          "unit": "ns"
+        },
+        {
+          "value": 920478,
+          "unit": "ns"
+        }
+      ],
+      "LengthSet": {
+        "value": 77,
+        "unit": "m"
+      },
+      "NoiseCut": {
+        "value": 10,
+        "unit": "amp"
+      },
+      "DL_cell": {
+        "value": 0.019,
+        "unit": "m"
+      },
+      "EnergyDivide": [
+        {
+          "value": 0.1,
+          "unit": "eV"
+        },
+        {
+          "value": 100,
+          "unit": "eV"
+        },
+        {
+          "value": 50000,
+          "unit": "eV"
+        }
+      ],
+      "Intergralnsub": {
+        "value": 1000,
+        "unit": ""
+      },
+      "EnergyCut_Low": {
+        "value": 10000,
+        "unit": "eV"
+      },
+      "EnergyCut_U8": {
+        "value": 1000000,
+        "unit": "eV"
+      },
+      "EnergyCut_High": {
+        "value": 300000000,
+        "unit": "eV"
+      },
+      "UFRandomTimes": {
+        "value": 1,
+        "unit": ""
+      },
+      "Bin": {
+        "bpd": 100,
+        "nDec": 10,
+        "LowEdge": -1
+      },
+      "NRebin": {
+        "value": 5,
+        "unit": ""
+      },
+      "SimFixmNAttentionFolders": [
+        "20260313005125"
+      ]
+    },
+    "Channels": {
+      "11": {
+        "DetID": 1,
+        "Tg": {
+          "value": -1151.375099,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 80,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 133,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 165,
+            "unit": "amp"
+          },
+          {
+            "value": 165,
+            "unit": "amp"
+          },
+          {
+            "value": 165,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 210,
+            "unit": "amp"
+          },
+          {
+            "value": 210,
+            "unit": "amp"
+          },
+          {
+            "value": 210,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.992726, 0.992645, 0.992819],
+        "Length": {
+          "value": 77.1,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 4,
+        "Mass": {
+          "value": 5.4,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9768
+      },
+      "13": {
+        "DetID": 2,
+        "Tg": {
+          "value": -1373.57,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 80,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 121,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 150,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 71.2,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 6.319,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "14": {
+        "DetID": 3,
+        "Tg": {
+          "value": -1373.57,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 80,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 121,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 150,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 71.2,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 6.319,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "16": {
+        "DetID": 4,
+        "Tg": {
+          "value": -1373.57,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 80,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 121,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 150,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 71.2,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 6.319,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "17": {
+        "DetID": 5,
+        "Tg": {
+          "value": -1373.57,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 80,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 121,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 150,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 71.2,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 6.319,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      },
+      "18": {
+        "DetID": 6,
+        "Tg": {
+          "value": -1373.57,
+          "unit": "ns"
+        },
+        "DeadTimeConstant": {
+          "value": 80,
+          "unit": "ns"
+        },
+        "Threshold": {
+          "value": 121,
+          "unit": "amp"
+        },
+        "ThresholdRe": [
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 155,
+            "unit": "amp"
+          },
+          {
+            "value": 150,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdFitcut": [
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          },
+          {
+            "value": 215,
+            "unit": "amp"
+          }
+        ],
+        "ThresholdEDivide": [0.984393, 0.984633, 0.987257],
+        "Length": {
+          "value": 71.2,
+          "unit": "m"
+        },
+        "SampleType": "235U",
+        "SampleNumber": 5,
+        "Mass": {
+          "value": 6.319,
+          "unit": "mg"
+        },
+        "Radius": {
+          "value": 24.9,
+          "unit": "mm"
+        },
+        "A": {
+          "value": 235,
+          "unit": ""
+        },
+        "DetEff": 0.9744
+      }
+    }
+  },
+  "Files": {
+    "RawTreeName": "WNSRawTree",
+    "RootTreeName": "tree",
+    "filelist": [
+      "run17082.root",
+      "run17083.root",
+      "run17084.root",
+      "run17085.root",
+      "run17086.root",
+      "run17087.root",
+      "run17088.root",
+      "run17089.root",
+      "run17090.root"
+    ],
+    "T0list": [
+      "run17082.root",
+      "run17083.root",
+      "run17084.root",
+      "run17085.root",
+      "run17086.root",
+      "run17087.root",
+      "run17088.root",
+      "run17089.root",
+      "run17090.root"
+    ],
+    "timelist": [
+      {
+        "value": 82248,
+        "unit": "s"
+      },
+      {
+        "value": 85980.7,
+        "unit": "s"
+      },
+      {
+        "value": 75663.3,
+        "unit": "s"
+      },
+      {
+        "value": 37005.2,
+        "unit": "s"
+      },
+      {
+        "value": 82459.96,
+        "unit": "s"
+      },
+      {
+        "value": 103584.52,
+        "unit": "s"
+      },
+      {
+        "value": 112217.6,
+        "unit": "s"
+      },
+      {
+        "value": 86121.4,
+        "unit": "s"
+      },
+      {
+        "value": 35207.8,
+        "unit": "s"
+      }
+    ]
+  }
+}

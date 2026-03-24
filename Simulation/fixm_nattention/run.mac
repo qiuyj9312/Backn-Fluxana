@@ -1,0 +1,18 @@
+/run/numberOfThreads 8
+
+/run/initialize
+
+/run/printProgress 10000000
+
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
+/run/beamOn 50000000
