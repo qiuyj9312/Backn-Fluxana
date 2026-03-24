@@ -50,7 +50,7 @@ OutPut/**/*.dat
 # Configuration
 config/*
 !config/example.json
-Simulation/
+Simulation/fixm_ffeff
 *.pyc
 
 #backup
