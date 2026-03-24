@@ -25,9 +25,14 @@ def run_script(nhist, runnumT, scalefactor, encut, isprint):
     print("所有命令执行完毕。")
 
 def main():
-    run_script("51", '15', '1', '9e3', '0')
-    run_script("52", '15', '1', '9e3', '0')
-
+    run_script("1", '15', '1', '9e3', '0')
+    run_script("2", '15', '1', '9e3', '0')
+    run_script("3", '15', '1', '9e3', '0')
+    run_script("4", '15', '1', '9e3', '0')
+    run_script("5", '15', '1', '9e3', '0')
+    run_script("6", '15', '1', '9e3', '0')
+    run_script("7", '15', '1', '9e3', '0')
+    run_script("8", '15', '1', '9e3', '0')
 
 # 执行主函数
 if __name__ == "__main__":

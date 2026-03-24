@@ -13,6 +13,7 @@ lib/
 *.dylib
 *.txt
 !CMakeLists.txt
+
 # CMake
 CMakeCache.txt
 CMakeFiles/
@@ -46,5 +47,11 @@ Thumbs.db
 OutPut/**/*.csv
 OutPut/**/*.dat
 
+# Configuration
+config/*
+!config/example.json
 Simulation/
 *.pyc
+
+#backup
+*.bak

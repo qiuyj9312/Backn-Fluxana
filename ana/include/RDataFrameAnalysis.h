@@ -127,6 +127,7 @@ protected:
   void CountT0();
   void GetHRateXSUF();
   void EvalDeltaTc1();
+  void CalSimTrans();
 
   /**
    * @brief 计算不确定度(纯虚函数)
@@ -161,7 +162,7 @@ protected:
    * @brief 加载 ENDF 截面数据
    * @return true on success, false on failure
    */
-  bool LoadSTDENDFData();
+  bool LoadSTDENDFData(int nrebin = 1);
 
   /**
    * @brief 加载实验样品 ENDF 截面数据
@@ -285,6 +286,17 @@ protected:
   std::vector<int> m_lisiChannelIDs;       /// LiSi通道ID列表
   std::string m_fixmOutputPath;            /// FIXM 输出数据路径
   std::string m_lisiOutputPath;            /// LiSi 输出数据路径
+
+  /// @brief 判断是否有 LiSi 配置可用
+  bool HasLiSiConfig() const { return m_lisiConfig && !m_lisiChannelIDs.empty(); }
+  /// @brief 临时将 m_fixmConfig/m_channelIDs/m_outputPath 切换至 LiSi
+  void SwitchToLiSi();
+  /// @brief 恢复到切换前的 FIXM 状态
+  void RestoreFromLiSi();
+  // 切换前保存的 FIXM 状态
+  const FIXMConfig *m_savedConfig{nullptr};
+  std::vector<int> m_savedChannelIDs;
+  std::string m_savedOutputPath;
 
   // 能量分箱配置
   int m_bpd;                    ///< Bins per decade

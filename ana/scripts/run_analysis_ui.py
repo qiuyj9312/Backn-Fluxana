@@ -617,9 +617,15 @@ def bg_run_process(job_id, exe_path, analysis_type):
         ana_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         project_root = os.path.dirname(ana_dir)
         
+        if analysis_type == "RunUnfolding":
+            run_uf_path = os.path.join(ana_dir, "scripts", "run_uf.py")
+            cmd = [sys.executable, run_uf_path]
+        else:
+            cmd = [exe_path, analysis_type]
+            
         # 运行进程并捕获输出
         process = subprocess.Popen(
-            [exe_path, analysis_type],
+            cmd,
             cwd=project_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -762,8 +768,8 @@ class AnalysisUIHandler(http.server.SimpleHTTPRequestHandler):
                 
                 job = JOBS[job_id]
                 if job['status'] == 'running' and job['process']:
-                    job['process'].terminate()
-                    job['logs'].append("[-] Received terminate signal...")
+                    job['process'].kill()
+                    job['logs'].append("[-] Received kill signal (forced stop)...")
                 
                 content = json.dumps({"status": "success"}).encode()
                 self.send_response(200)
@@ -781,12 +787,15 @@ class AnalysisUIHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_error(404)
 
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    pass
+
 def run_server(port, exe_path):
     AnalysisUIHandler.exe_path = exe_path
     
     # 允许重用端口
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", port), AnalysisUIHandler) as httpd:
+    ThreadedTCPServer.allow_reuse_address = True
+    with ThreadedTCPServer(("", port), AnalysisUIHandler) as httpd:
         print(f"[*] Starting Analysis UI on http://localhost:{port}")
         if exe_path:
             print(f"[*] Executable path: {exe_path}")

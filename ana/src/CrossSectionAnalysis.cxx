@@ -127,7 +127,7 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
     TH1D *horiginin = nullptr;
     fin_hrate->GetObject(Form("h1_En_%d", chID), horiginin);
     TH1D *hatten = nullptr;
-    fin_hatten->GetObject(Form("htrans%d", m_detID[chID]), hatten);
+    fin_hatten->GetObject(Form("htrans%d", chID), hatten);
 
     if (horiginin != nullptr) {
       // Clone to avoid modifying the file's histogram

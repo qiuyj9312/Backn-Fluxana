@@ -19,6 +19,7 @@ ANALYSIS_GROUPS = {
         "desc": "预处理分析 (RDataFrameAnalysis)",
         "types": {
             "AnalyzeWithRDataFrame":      "完整 RDataFrame 分析",
+            "EvalDeltaTc1":               "评估相邻事件时间差",
             "CountT0":                    "T0 计数",
             "GetGammaFlash":              "Gamma 闪光时间拟合",
             "GetThR1":                    "阈值分析 R1（能量 vs 幅度）",
@@ -26,24 +27,36 @@ ANALYSIS_GROUPS = {
             "CalFlightPath":              "飞行路径长度计算",
             "GetThR2":                    "阈值分析 R2（指数拟合）",
             "GetReactionRate":            "反应率直方图",
-            "EvalDeltaTc1":               "评估相邻事件差值",
-            "GetPileupCorr":              "堆积修正",
+            "GetPileupCorr":              "脉冲堆积修正",
             "GetHRateXSUF":               "解谱后反应率",
-            "Coincheck":                  "符合检查",
+            "Coincheck":                  "一致性检查",
+        }
+    },
+    "Unfolding": {
+        "desc": "解谱分析 (DemoUnfolding)",
+        "types": {
+            "RunUnfolding":               "运行解谱程序",
+        }
+    },
+    "SIMDataProcessing":
+    {
+        "desc": "模拟数据处理 (RDataFrameAnalysis)",
+        "types": {
+            "CalSimTrans":                "模拟通量衰减计算",
         }
     },
     "Flux": {
         "desc": "中子通量分析 (NeutronFluxAnalysis)",
         "types": {
-            "CalFlux":                    "中子通量计算",
             "CalUncertainty":             "通量不确定度计算",
+            "CalFlux":                    "中子通量计算",
         }
     },
     "XS": {
         "desc": "截面分析 (CrossSectionAnalysis)",
         "types": {
-            "GetXSSingleBunch": "单束截面计算",
             "CalUncertainty":   "截面不确定度计算（TODO）",
+            "GetXSSingleBunch": "单束截面计算",
         }
     },
 }
@@ -107,11 +120,11 @@ def prepare_output_directories(project_root: str):
         print("警告：无法加载配置文件，跳过输出目录检查。")
         return
 
-    data_typ = config.get("DataTyp")
+    data_typ = config.get("DataType")
     exp_name = config.get("ExpName")
     
     if not data_typ or not exp_name:
-        print("警告：配置文件中缺少 DataTyp 或 ExpName 字段，跳过输出目录检查。")
+        print("警告：配置文件中缺少 DataType 或 ExpName 字段，跳过输出目录检查。")
         return
 
     if data_typ == "Flux":
@@ -123,21 +136,38 @@ def prepare_output_directories(project_root: str):
         print(f"警告：配置文件中未找到对应的输出路径，跳过检查。")
         return
 
-    exp_dir = os.path.join(base_path, exp_name)
+    exp_config_path = os.path.join(project_root, "config", f"{exp_name}.json")
+    exp_config = load_config(exp_config_path)
+
+    detectors = []
+    if data_typ == "Flux" and exp_config:
+        if "FIXM" in exp_config:
+            detectors.append("FIXM")
+        if "LiSi" in exp_config:
+            detectors.append("LiSi")
+        if "LISI" in exp_config:
+            detectors.append("LISI")
+            
+    # 如果没找到， fallback 回原来的直属目录架构，或者根据用户需要默认都加上
+    if not detectors:
+        detectors = [""]
+
     subdirs = ["cutgamma", "Outcome", "para"]
     
-    print(f"检查输出目录 ({exp_dir}):")
+    print(f"检查输出目录 ({base_path}):")
 
-    for subdir in subdirs:
-        dir_to_create = os.path.join(exp_dir, subdir)
-        if not os.path.exists(dir_to_create):
-            try:
-                os.makedirs(dir_to_create)
-                print(f"  [+] 已创建子目录: {subdir}")
-            except Exception as e:
-                print(f"  [x] 错误：无法创建 {subdir}: {e}")
-        else:
-            print(f"  [v] 已存在子目录: {subdir}")
+    for det in detectors:
+        det_dir = os.path.join(base_path, exp_name, det) if det else os.path.join(base_path, exp_name)
+        for subdir in subdirs:
+            dir_to_create = os.path.join(det_dir, subdir)
+            if not os.path.exists(dir_to_create):
+                try:
+                    os.makedirs(dir_to_create)
+                    print(f"  [+] 已创建子目录: {det}/{subdir}" if det else f"  [+] 已创建子目录: {subdir}")
+                except Exception as e:
+                    print(f"  [x] 错误：无法创建 {dir_to_create}: {e}")
+            else:
+                print(f"  [v] 已存在子目录: {det}/{subdir}" if det else f"  [v] 已存在子目录: {subdir}")
     print()
 
 
@@ -225,6 +255,14 @@ def run_analysis(exe_path: str, analysis_type: str) -> int:
     project_root = os.path.dirname(ana_dir)  # XSana 目录
     
     try:
+        if analysis_type == "RunUnfolding":
+            run_uf_path = os.path.join(ana_dir, "scripts", "run_uf.py")
+            result = subprocess.run(
+                [sys.executable, run_uf_path],
+                cwd=project_root
+            )
+            return result.returncode
+            
         # 直接运行，实时显示输出
         result = subprocess.run(
             [exe_path, analysis_type],

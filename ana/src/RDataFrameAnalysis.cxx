@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <climits>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -103,6 +104,28 @@ bool RDataFrameAnalysis::InitializeTChain() {
 }
 
 bool RDataFrameAnalysis::RunAnalysis(const std::string &analysisType) {
+  // CalSimTrans uses its own TChain, no need to initialize the experiment
+  // TChain
+  if (analysisType == "CalSimTrans") {
+    try {
+      CalSimTrans();
+    } catch (const std::exception &e) {
+      std::cerr << "Error during CalSimTrans: " << e.what() << std::endl;
+      return false;
+    }
+    return true;
+  }
+
+  if (analysisType == "CountT0") {
+    try {
+      CountT0();
+    } catch (const std::exception &e) {
+      std::cerr << "Error during CountT0: " << e.what() << std::endl;
+      return false;
+    }
+    return true;
+  }
+
   // Initialize TChain if not already initialized
   if (!m_isInitialized) {
     if (!InitializeTChain()) {
@@ -129,8 +152,6 @@ bool RDataFrameAnalysis::RunAnalysis(const std::string &analysisType) {
       GetPileupCorr();
     } else if (analysisType == "Coincheck") {
       Coincheck();
-    } else if (analysisType == "CountT0") {
-      CountT0();
     } else if (analysisType == "GetHRateXSUF") {
       GetHRateXSUF();
     } else if (analysisType == "EvalDeltaTc1") {
@@ -211,6 +232,24 @@ void RDataFrameAnalysis::InitializeCommonConfig() {
   }
 }
 
+void RDataFrameAnalysis::SwitchToLiSi() {
+  m_savedConfig = m_fixmConfig;
+  m_savedChannelIDs = m_channelIDs;
+  m_savedOutputPath = m_outputPath;
+
+  m_fixmConfig = m_lisiConfig;
+  m_channelIDs = m_lisiChannelIDs;
+  m_outputPath = m_lisiOutputPath;
+  std::cout << "\n=== Switched to LiSi configuration ===" << std::endl;
+}
+
+void RDataFrameAnalysis::RestoreFromLiSi() {
+  m_fixmConfig = m_savedConfig;
+  m_channelIDs = m_savedChannelIDs;
+  m_outputPath = m_savedOutputPath;
+  std::cout << "=== Restored to FIXM configuration ===\n" << std::endl;
+}
+
 void RDataFrameAnalysis::InitializeEnergyBins() {
   const auto &binConfig = m_fixmConfig->Global.Bin;
   m_bpd = binConfig.bpd;
@@ -250,7 +289,7 @@ bool RDataFrameAnalysis::LoadXSENDFData() {
   return true;
 }
 
-bool RDataFrameAnalysis::LoadSTDENDFData() {
+bool RDataFrameAnalysis::LoadSTDENDFData(int nrebin) {
   // Clear existing data
   m_xs_nr.clear();
   m_xs_ntot.clear();
@@ -306,19 +345,29 @@ bool RDataFrameAnalysis::LoadSTDENDFData() {
             << m_configReader.GetENDFDataLi6NTOT() << std::endl;
 
   // Convert m_xs_nr TGraphs to TH1D and store in m_hxs_nr
+  // Use rebinned bin edges (step=nrebin) to match hrate_re after Rebin(nrebin)
   if (m_nbins > 0 && !m_EnBins.empty()) {
+    const int step = (nrebin > 1) ? nrebin : 1;
+    const int nbins_reb = m_nbins / step;
+    // Build edge array: pick every step-th entry from m_EnBins
+    std::vector<double> rebinnedEdges;
+    rebinnedEdges.reserve(nbins_reb + 1);
+    for (int i = 0; i <= nbins_reb; i++) {
+      rebinnedEdges.push_back(m_EnBins[i * step]);
+    }
+
     for (const auto &pair : m_xs_nr) {
       std::string hname = "hxs_nr_" + pair.first;
-      TH1D *h =
-          new TH1D(hname.c_str(), pair.first.c_str(), m_nbins, m_EnBins.data());
-      h->SetDirectory(nullptr); // Ensure histogram persists beyond current
-                                // directory closing
-      for (int i = 1; i <= m_nbins; i++) {
+      TH1D *h = new TH1D(hname.c_str(), pair.first.c_str(), nbins_reb,
+                          rebinnedEdges.data());
+      h->SetDirectory(nullptr);
+      for (int i = 1; i <= nbins_reb; i++) {
         h->SetBinContent(i, pair.second->Eval(h->GetBinCenter(i)));
       }
       m_hxs_nr[pair.first] = h;
     }
-    std::cout << "Converted reaction cross section TGraphs to TH1D."
+    std::cout << "Converted reaction cross section TGraphs to TH1D"
+              << " (nrebin=" << step << ", nbins=" << nbins_reb << ")."
               << std::endl;
   } else {
     std::cerr << "Warning: Energy bins not initialized. Cannot create TH1D for "
@@ -471,7 +520,7 @@ void RDataFrameAnalysis::GetGammaFlash() {
     // Create TH1D: Time distribution
     auto h1 = df_ch.Histo1D(
         {Form("h1_time_CH%d", chID),
-         Form("Time Distribution - Channel %d;Time (ns);Entries", chID), 3600,
+         Form("Time Distribution - Channel %d;Time (ns);Entries", chID), 1800,
          -1800, 0},
         "fTc1");
 
@@ -489,7 +538,7 @@ void RDataFrameAnalysis::GetGammaFlash() {
     auto h2 = df_ch.Histo2D(
         {Form("h2_time_hp_CH%d", chID),
          Form("Time vs Pulse Height - Channel %d;Time (ns);Pulse Height", chID),
-         3600, -1800, 0, 2000, 0, 2000},
+         1800, -1800, 0, 2000, 0, 2000},
         "fTc1", "fhpn");
 
     // Draw TH1D on left pad
@@ -763,155 +812,166 @@ void RDataFrameAnalysis::GetReactionRate() {
 
   EnableMultiThreading();
   InitializeCommonConfig();
-  InitializeEnergyBins();
 
-  if (!LoadGammaCuts()) {
-    return;
-  }
+  auto core_logic = [&]() {
+    InitializeEnergyBins();
 
-  std::cout << "Number of channels to analyze: " << m_channelIDs.size()
-            << std::endl;
-
-  auto df = CreateDataFrame();
-
-  // Get energy divide from configuration
-  const std::vector<double> &energyDivide = m_fixmConfig->Global.EnergyDivide;
-
-  // Delta L data is loaded in InitializeCommonConfig
-  std::cout << "Average Delta L: " << m_avgDL << std::endl;
-
-  // Load ENDF data
-  if (!LoadSTDENDFData()) {
-    std::cerr << "Error: Failed to load ENDF data" << std::endl;
-    return;
-  }
-
-  // Open output file for writing
-
-  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
-  std::string outpath = outcomePath + "/hrate.root";
-
-  auto f = new TFile(outpath.c_str(), "recreate");
-
-  // Process each channel: create histograms, process data, and store results
-  for (int chID : m_channelIDs) {
-    auto it = m_fixmConfig->Channels.find(chID);
-    if (it == m_fixmConfig->Channels.end()) {
-      std::cerr << "Warning: Channel " << chID << " not found in config"
-                << std::endl;
-      continue;
+    if (!LoadGammaCuts()) {
+      return;
     }
-    const auto &chConfig = it->second;
-    double Tg = chConfig.Tg;
-    double Length = chConfig.Length;
-    double Lengthgeo = Length - m_avgDL;
-    double Threshold = chConfig.Threshold;
-    const std::vector<double> &ThresholdEDivide = chConfig.ThresholdEDivide;
-    std::string sampletype = chConfig.SampleType;
 
-    PrintChannelInfo(chID);
+    std::cout << "Number of channels to analyze: " << m_channelIDs.size()
+              << std::endl;
 
-    // Calculate areal density
-    double sample_r = chConfig.Radius * mm_to_cm; // to cm
-    double sample_area = sample_r * sample_r * TMath::Pi();
-    double sample_t = chConfig.Mass / sample_area; // mg/cm2
-    double ArealDensity =
-        sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
-    double nd = ArealDensity;
+    auto df = CreateDataFrame();
 
-    // Apply filters and define columns
-    auto df_processed = FilterByChannel(df, chID);
-    df_processed = FilterByGammaCut(df_processed, chID);
-    df_processed = DefineTOFAndEnergy(df_processed, Tg, Length);
+    // Get energy divide from configuration
+    const std::vector<double> &energyDivide = m_fixmConfig->Global.EnergyDivide;
 
-    // Fill 2D histograms using RDataFrame
-    auto h2t = df_processed.Histo2D(
-        {Form("h2_tof_%d", chID), Form("h2dt%d;TOF(ns);Amplitude(abs)", chID),
-         m_nbins, m_EnBins.data(), 2000, 0, 2000},
-        "tof", "fhpn");
-    auto h2E = df_processed.Histo2D(
-        {Form("h2_En_%d", chID),
-         Form("h2dEn%d;Neutron Energy(eV);Amplitude(abs)", chID), m_nbins,
-         m_EnBins.data(), 2000, 0, 2000},
-        "En", "fhpn");
+    // Delta L data is loaded in InitializeCommonConfig
+    std::cout << "Average Delta L: " << m_avgDL << std::endl;
 
-    // Filter by threshold and apply energy divide factors
-    auto df_threshold = df_processed.Filter(
-        [Threshold](double fhpn) { return fhpn > Threshold; }, {"fhpn"});
+    // Load ENDF data
+    if (!LoadSTDENDFData()) {
+      std::cerr << "Error: Failed to load ENDF data" << std::endl;
+      return;
+    }
 
-    auto df_withFactor = df_threshold.Define(
-        "factor",
-        [energyDivide, ThresholdEDivide](double En) {
-          double factor = 1.;
-          if (En >= energyDivide[0] && En < energyDivide[1]) {
-            factor = 1. / ThresholdEDivide[0];
-          } else if (En >= energyDivide[1] && En < energyDivide[2]) {
-            factor = 1. / ThresholdEDivide[1];
-          } else if (En >= energyDivide[2]) {
-            factor = 1. / ThresholdEDivide[2];
-          }
-          return factor;
-        },
-        {"En"});
+    // Open output file for writing
 
-    // Fill 1D histograms using RDataFrame
-    auto h1t = df_withFactor.Histo1D({Form("h1_tof_%d", chID),
-                                      Form("htrate%d;TOF(ns);Counts", chID),
-                                      10004000, 0, 10004000},
-                                     "tof", "factor");
-    auto h1E = df_withFactor.Histo1D(
-        {Form("h1_En_%d", chID),
-         Form("hEnrate%d;Neutron Energy(eV);Counts", chID), m_nbins,
-         m_EnBins.data()},
-        "En", "factor");
+    std::string outcomePath = m_outputPath + m_expName + "/Outcome";
+    std::string outpath = outcomePath + "/hrate.root";
 
-    // Calculate cross section and yield
-    auto df_withXS = df_withFactor.Define(
-        "factor_xs_nr",
-        [sampletype, xs_nr = m_xs_nr.at(sampletype)](double En, double factor) {
-          return factor / xs_nr->Eval(En);
-        },
-        {"En", "factor"});
-    // m_h1ExsNs[fChannelID]->Fill(En, factors / yield / xs_nf * xs_ntot);
-    auto df_withYield = df_withXS.Define(
-        "factor_xs_yield",
-        [nd, sampletype,
-         xs_ntot = m_xs_ntot.at(sampletype)](double En, double factor_xs_nf) {
-          return factor_xs_nf / (1. - exp(-nd * xs_ntot->Eval(En))) /
-                 xs_ntot->Eval(En);
-        },
-        {"En", "factor_xs_nr"});
+    auto f = new TFile(outpath.c_str(), "recreate");
 
-    // Fill cross section histograms using RDataFrame
-    auto h1Exs = df_withYield.Histo1D(
-        {Form("h1_Enxs_%d", chID),
-         Form("hEnxsrate%d;Neutron Energy(eV);Counts/barn", chID), m_nbins,
-         m_EnBins.data()},
-        "En", "factor_xs_nr");
+    // Process each channel: create histograms, process data, and store results
+    for (int chID : m_channelIDs) {
+      auto it = m_fixmConfig->Channels.find(chID);
+      if (it == m_fixmConfig->Channels.end()) {
+        std::cerr << "Warning: Channel " << chID << " not found in config"
+                  << std::endl;
+        continue;
+      }
+      const auto &chConfig = it->second;
+      double Tg = chConfig.Tg;
+      double Length = chConfig.Length;
+      double Lengthgeo = Length - m_avgDL;
+      double Threshold = chConfig.Threshold;
+      const std::vector<double> &ThresholdEDivide = chConfig.ThresholdEDivide;
+      std::string sampletype = chConfig.SampleType;
 
-    auto h1ExsNs = df_withYield.Histo1D(
-        {Form("h1_EnxsNs_%d", chID),
-         Form("h1EnxsNsrate%d;Neutron Energy(eV);Neutrons", chID), m_nbins,
-         m_EnBins.data()},
-        "En", "factor_xs_yield");
+      PrintChannelInfo(chID);
 
-    // Write histograms to file directly
-    h2t->Write();
-    h2E->Write();
-    h1t->Write();
-    h1E->Write();
-    h1Exs->Write();
-    h1ExsNs->Write();
+      // Calculate areal density
+      double sample_r = chConfig.Radius * mm_to_cm; // to cm
+      double sample_area = sample_r * sample_r * TMath::Pi();
+      double sample_t = chConfig.Mass / sample_area; // mg/cm2
+      double ArealDensity =
+          sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
+      double nd = ArealDensity;
 
-    std::cout << "  Processed channel " << chID << std::endl;
+      // Apply filters and define columns
+      auto df_processed = FilterByChannel(df, chID);
+      df_processed = FilterByGammaCut(df_processed, chID);
+      df_processed = DefineTOFAndEnergy(df_processed, Tg, Length);
+
+      // Fill 2D histograms using RDataFrame
+      auto h2t = df_processed.Histo2D(
+          {Form("h2_tof_%d", chID), Form("h2dt%d;TOF(ns);Amplitude(abs)", chID),
+           m_nbins, m_EnBins.data(), 2000, 0, 2000},
+          "tof", "fhpn");
+      auto h2E = df_processed.Histo2D(
+          {Form("h2_En_%d", chID),
+           Form("h2dEn%d;Neutron Energy(eV);Amplitude(abs)", chID), m_nbins,
+           m_EnBins.data(), 2000, 0, 2000},
+          "En", "fhpn");
+
+      // Filter by threshold and apply energy divide factors
+      auto df_threshold = df_processed.Filter(
+          [Threshold](double fhpn) { return fhpn > Threshold; }, {"fhpn"});
+
+      auto df_withFactor = df_threshold.Define(
+          "factor",
+          [energyDivide, ThresholdEDivide](double En) {
+            double factor = 1.;
+            if (En >= energyDivide[0] && En < energyDivide[1]) {
+              factor = 1. / ThresholdEDivide[0];
+            } else if (En >= energyDivide[1] && En < energyDivide[2]) {
+              factor = 1. / ThresholdEDivide[1];
+            } else if (En >= energyDivide[2]) {
+              factor = 1. / ThresholdEDivide[2];
+            }
+            return factor;
+          },
+          {"En"});
+
+      // Fill 1D histograms using RDataFrame
+      auto h1t = df_withFactor.Histo1D({Form("h1_tof_%d", chID),
+                                        Form("htrate%d;TOF(ns);Counts", chID),
+                                        10004000, 0, 10004000},
+                                       "tof", "factor");
+      auto h1E = df_withFactor.Histo1D(
+          {Form("h1_En_%d", chID),
+           Form("hEnrate%d;Neutron Energy(eV);Counts", chID), m_nbins,
+           m_EnBins.data()},
+          "En", "factor");
+
+      // Calculate cross section and yield
+      auto df_withXS = df_withFactor.Define(
+          "factor_xs_nr",
+          [sampletype, xs_nr = m_xs_nr.at(sampletype)](
+              double En, double factor) { return factor / xs_nr->Eval(En); },
+          {"En", "factor"});
+      // m_h1ExsNs[fChannelID]->Fill(En, factors / yield / xs_nf * xs_ntot);
+      auto df_withYield = df_withXS.Define(
+          "factor_xs_yield",
+          [nd, sampletype,
+           xs_ntot = m_xs_ntot.at(sampletype)](double En, double factor_xs_nf) {
+            return factor_xs_nf / (1. - exp(-nd * xs_ntot->Eval(En))) /
+                   xs_ntot->Eval(En);
+          },
+          {"En", "factor_xs_nr"});
+
+      // Fill cross section histograms using RDataFrame
+      auto h1Exs = df_withYield.Histo1D(
+          {Form("h1_Enxs_%d", chID),
+           Form("hEnxsrate%d;Neutron Energy(eV);Counts/barn", chID), m_nbins,
+           m_EnBins.data()},
+          "En", "factor_xs_nr");
+
+      auto h1ExsNs = df_withYield.Histo1D(
+          {Form("h1_EnxsNs_%d", chID),
+           Form("h1EnxsNsrate%d;Neutron Energy(eV);Neutrons", chID), m_nbins,
+           m_EnBins.data()},
+          "En", "factor_xs_yield");
+
+      // Write histograms to file directly
+      h2t->Write();
+      h2E->Write();
+      h1t->Write();
+      h1E->Write();
+      h1Exs->Write();
+      h1ExsNs->Write();
+
+      std::cout << "  Processed channel " << chID << std::endl;
+    }
+
+    // Close output file
+    f->Close();
+
+    std::cout << std::endl;
+    std::cout << "Output file saved: " << outpath << std::endl;
+    std::cout << std::endl;
+  };
+
+  std::cout << "\n=== Running GetReactionRate for FIXM ===" << std::endl;
+  core_logic();
+
+  if (m_configReader.GetDataType() == "Flux" && HasLiSiConfig()) {
+    SwitchToLiSi();
+    core_logic();
+    RestoreFromLiSi();
   }
-
-  // Close output file
-  f->Close();
-
-  std::cout << std::endl;
-  std::cout << "Output file saved: " << outpath << std::endl;
-  std::cout << std::endl;
 }
 
 void RDataFrameAnalysis::GetDtForCalL() {
@@ -1183,245 +1243,257 @@ void RDataFrameAnalysis::GetPileupCorr() {
   EnableMultiThreading();
   InitializeCommonConfig();
 
-  // Get FPulse (pulse frequency in Hz) from ConfigReader
-  double FPulse = m_configReader.GetFPulse();
-  if (FPulse <= 0) {
-    std::cerr << "Error: Invalid pulse frequency: " << FPulse << " Hz"
+  auto core_logic = [&]() {
+    // Get FPulse (pulse frequency in Hz) from ConfigReader
+    double FPulse = m_configReader.GetFPulse();
+    if (FPulse <= 0) {
+      std::cerr << "Error: Invalid pulse frequency: " << FPulse << " Hz"
+                << std::endl;
+      return;
+    }
+    std::cout << "Pulse frequency: " << FPulse << " Hz" << std::endl;
+
+    // Get total time from timelist
+    double T_total = 0.0;
+    const auto &timeList = m_configReader.GetTimeList();
+    for (const auto &time : timeList) {
+      T_total += time;
+    }
+
+    // If no timelist or invalid total time, abort
+    if (T_total <= 0) {
+      std::cerr << "Error: Invalid total time from timelist: " << T_total
+                << " seconds" << std::endl;
+      return;
+    }
+    std::cout << "Total live time: " << T_total << " seconds" << std::endl;
+
+    if (m_channelIDs.empty()) {
+      std::cerr << "Error: No channels configured in CHIDUSE" << std::endl;
+      return;
+    }
+    std::cout << "Number of channels: " << m_channelIDs.size() << std::endl;
+
+    // Build channel-to-length map
+    std::map<int, double> channel_length;
+    for (const auto &[chID, chConfig] : m_fixmConfig->Channels) {
+      channel_length[chID] = chConfig.Length;
+    }
+
+    // Total pulses emitted during the run
+    double N_pulse = T_total * FPulse;
+    if (N_pulse <= 0) {
+      std::cerr << "Error: Invalid pulse count" << std::endl;
+      return;
+    }
+    std::cout << "Total pulses: " << N_pulse << std::endl;
+
+    // Open hrate.root file
+    std::string hrate_path = m_outputPath + m_expName + "/Outcome/hrate.root";
+    std::cout << "Opening file: " << hrate_path << std::endl;
+
+    std::unique_ptr<TFile> file(TFile::Open(hrate_path.c_str()));
+    if (!file || file->IsZombie()) {
+      std::cerr << "Error: Cannot open " << hrate_path << std::endl;
+      return;
+    }
+
+    std::string xspara_path = m_outputPath + m_expName + "/para/";
+    std::string pileup_corr_name = xspara_path + "pileup_corr.root";
+    auto frootcorr_out = new TFile(pileup_corr_name.c_str(), "RECREATE");
+
+    std::string hratepileup_name =
+        m_outputPath + m_expName + "/Outcome/hratepileup.root";
+    auto fhratepileup_out = new TFile(hratepileup_name.c_str(), "RECREATE");
+
+    // Map to store all h_corr_ histograms for plotting
+    std::map<int, TH1D *> m_h_corr;
+
+    // Process each channel
+    for (int chID : m_channelIDs) {
+      double tau = m_configReader.GetTau(chID);
+      PrintChannelInfo(chID);
+
+      // Get histogram for this channel
+      TH1D *h1 = nullptr;
+      file->GetObject(Form("h1_En_%d", chID), h1);
+      if (!h1) {
+        std::cerr << "  Warning: Channel " << chID << " En histogram not found!"
+                  << std::endl;
+        continue;
+      }
+      auto h_corr_ = (TH1D *)h1->Clone(Form("h_pileup_corr_%d", chID));
+      h_corr_->SetDirectory(0); // Detach from file to keep it in memory
+
+      TH1D *h1_tof = nullptr;
+      file->GetObject(Form("h1_tof_%d", chID), h1_tof);
+      if (!h1_tof) {
+        std::cerr << "  Warning: Channel " << chID
+                  << " tof histogram not found!" << std::endl;
+        continue;
+      }
+      auto ht_corr_ = (TH1D *)h1_tof->Clone(Form("ht_pileup_corr_%d", chID));
+      ht_corr_->SetDirectory(0);
+
+      TH1D *h1_Enxs = nullptr;
+      file->GetObject(Form("h1_Enxs_%d", chID), h1_Enxs);
+      if (!h1_Enxs) {
+        std::cerr << "  Warning: Channel " << chID
+                  << " Enxs histogram not found!" << std::endl;
+        continue;
+      }
+
+      TH1D *h1_EnxsNs = nullptr;
+      file->GetObject(Form("h1_EnxsNs_%d", chID), h1_EnxsNs);
+      if (!h1_EnxsNs) {
+        std::cerr << "  Warning: Channel " << chID
+                  << " EnxsNs histogram not found!" << std::endl;
+        continue;
+      }
+
+      // Get flight length for this channel
+      double flight_length = 0.0;
+      auto it_len = channel_length.find(chID);
+      if (it_len != channel_length.end()) {
+        flight_length = it_len->second;
+      }
+      if (flight_length <= 0) {
+        std::cerr << "  Warning: Invalid flight length for channel " << chID
+                  << std::endl;
+        continue;
+      }
+
+      std::vector<double> v_En;
+      std::vector<double> v_rcorr;
+      int nbins = h1->GetNbinsX();
+
+      // Process each bin
+      for (int bx = 1; bx <= nbins; bx++) {
+        double bin_center = h1->GetXaxis()->GetBinCenter(bx);
+        double bin_content = h1->GetBinContent(bx);
+
+        double E_left = h1->GetXaxis()->GetBinLowEdge(bx);
+        double E_right = h1->GetXaxis()->GetBinUpEdge(bx);
+
+        // Calculate TOF bin width in ns
+        double tof_left = calTOF(E_left, flight_length);
+        double tof_right = calTOF(E_right, flight_length);
+        double bin_width = fabs(tof_right - tof_left); // ns
+
+        // Calculate pulse rate per ns
+        double R_pulse = bin_content / (N_pulse * bin_width);
+
+        // Calculate pileup correction factor
+        double fcorr = 1.0;
+        if (tau * R_pulse < 1.0 && R_pulse > 0.) {
+          fcorr = 1.0 / (1.0 - tau * R_pulse);
+        }
+        h_corr_->SetBinContent(bx, fcorr);
+      }
+
+      int nbins_tof = h1_tof->GetNbinsX();
+      for (int bx = 1; bx <= nbins_tof; bx++) {
+        double bin_content = h1_tof->GetBinContent(bx);
+        double bin_width = h1_tof->GetBinWidth(bx); // ns
+
+        double R_pulse = bin_content / (N_pulse * bin_width);
+
+        double fcorr = 1.0;
+        if (tau * R_pulse < 1.0 && R_pulse > 0.) {
+          fcorr = 1.0 / (1.0 - tau * R_pulse);
+        }
+        ht_corr_->SetBinContent(bx, fcorr);
+      }
+
+      // Apply corrections
+      h1->Multiply(h_corr_);
+      h1_tof->Multiply(ht_corr_);
+      h1_Enxs->Multiply(h_corr_);
+      h1_EnxsNs->Multiply(h_corr_);
+
+      // Store histogram for plotting
+      m_h_corr[chID] = h_corr_;
+
+      frootcorr_out->cd();
+      h_corr_->Write();
+      ht_corr_->Write();
+
+      fhratepileup_out->cd();
+      h1->Write();
+      h1_tof->Write();
+      h1_Enxs->Write();
+      h1_EnxsNs->Write();
+    }
+    frootcorr_out->Close();
+    fhratepileup_out->Close();
+
+    std::cout << "  Saved pileup correction table to: " << pileup_corr_name
               << std::endl;
-    return;
-  }
-  std::cout << "Pulse frequency: " << FPulse << " Hz" << std::endl;
+    std::cout << "  Saved pileup corrected histograms to: " << hratepileup_name
+              << std::endl;
 
-  // Get total time from timelist
-  double T_total = 0.0;
-  const auto &timeList = m_configReader.GetTimeList();
-  for (const auto &time : timeList) {
-    T_total += time;
-  }
+    // Create canvas and plot all h_corr_ histograms
+    if (!m_h_corr.empty()) {
+      TCanvas *c_corr =
+          new TCanvas("c_pileup_corr", "Pileup Correction Factors", 1200, 800);
+      c_corr->SetLogx();
+      c_corr->SetGridx();
+      c_corr->SetGridy();
 
-  // If no timelist or invalid total time, abort
-  if (T_total <= 0) {
-    std::cerr << "Error: Invalid total time from timelist: " << T_total
-              << " seconds" << std::endl;
-    return;
-  }
-  std::cout << "Total live time: " << T_total << " seconds" << std::endl;
+      // Define color palette for different channels
+      std::vector<int> colors = {kRed,      kBlue,       kGreen + 2, kMagenta,
+                                 kCyan + 1, kOrange + 7, kViolet,    kTeal - 5,
+                                 kPink + 1, kSpring - 5};
 
-  if (m_channelIDs.empty()) {
-    std::cerr << "Error: No channels configured in CHIDUSE" << std::endl;
-    return;
-  }
-  std::cout << "Number of channels: " << m_channelIDs.size() << std::endl;
+      TLegend *leg = new TLegend(0.75, 0.6, 0.95, 0.9);
+      leg->SetBorderSize(1);
+      leg->SetFillStyle(0);
 
-  // Build channel-to-length map
-  std::map<int, double> channel_length;
-  for (const auto &[chID, chConfig] : m_fixmConfig->Channels) {
-    channel_length[chID] = chConfig.Length;
-  }
+      bool first = true;
+      int colorIdx = 0;
 
-  // Total pulses emitted during the run
-  double N_pulse = T_total * FPulse;
-  if (N_pulse <= 0) {
-    std::cerr << "Error: Invalid pulse count" << std::endl;
-    return;
-  }
-  std::cout << "Total pulses: " << N_pulse << std::endl;
+      for (auto &[chID, h_corr] : m_h_corr) {
+        // Set histogram style
+        int color = colors[colorIdx % colors.size()];
+        h_corr->SetLineColor(color);
+        h_corr->SetLineWidth(2);
+        h_corr->SetStats(0);
 
-  // Open hrate.root file
-  std::string hrate_path = m_outputPath + m_expName + "/Outcome/hrate.root";
-  std::cout << "Opening file: " << hrate_path << std::endl;
+        // Set axis titles (only for first histogram)
+        if (first) {
+          h_corr->SetTitle(
+              "Pileup Correction Factors;Energy (eV);Correction Factor");
+          h_corr->GetYaxis()->SetRangeUser(0.9, 1.5);
+          h_corr->Draw("HIST");
+          first = false;
+        } else {
+          h_corr->Draw("HIST SAME");
+        }
 
-  std::unique_ptr<TFile> file(TFile::Open(hrate_path.c_str()));
-  if (!file || file->IsZombie()) {
-    std::cerr << "Error: Cannot open " << hrate_path << std::endl;
-    return;
-  }
+        // Add to legend
+        leg->AddEntry(h_corr, Form("Channel %d", chID), "l");
 
-  std::string xspara_path = m_outputPath + m_expName + "/para/";
-  std::string pileup_corr_name = xspara_path + "pileup_corr.root";
-  auto frootcorr_out = new TFile(pileup_corr_name.c_str(), "RECREATE");
-
-  std::string hratepileup_name = m_outputPath + m_expName + "/Outcome/hratepileup.root";
-  auto fhratepileup_out = new TFile(hratepileup_name.c_str(), "RECREATE");
-
-  // Map to store all h_corr_ histograms for plotting
-  std::map<int, TH1D *> m_h_corr;
-
-  // Process each channel
-  for (int chID : m_channelIDs) {
-    double tau = m_configReader.GetTau(chID);
-    PrintChannelInfo(chID);
-
-    // Get histogram for this channel
-    TH1D *h1 = nullptr;
-    file->GetObject(Form("h1_En_%d", chID), h1);
-    if (!h1) {
-      std::cerr << "  Warning: Channel " << chID << " En histogram not found!"
-                << std::endl;
-      continue;
-    }
-    auto h_corr_ = (TH1D *)h1->Clone(Form("h_pileup_corr_%d", chID));
-    h_corr_->SetDirectory(0); // Detach from file to keep it in memory
-
-    TH1D *h1_tof = nullptr;
-    file->GetObject(Form("h1_tof_%d", chID), h1_tof);
-    if (!h1_tof) {
-      std::cerr << "  Warning: Channel " << chID << " tof histogram not found!"
-                << std::endl;
-      continue;
-    }
-    auto ht_corr_ = (TH1D *)h1_tof->Clone(Form("ht_pileup_corr_%d", chID));
-    ht_corr_->SetDirectory(0);
-
-    TH1D *h1_Enxs = nullptr;
-    file->GetObject(Form("h1_Enxs_%d", chID), h1_Enxs);
-    if (!h1_Enxs) {
-      std::cerr << "  Warning: Channel " << chID << " Enxs histogram not found!"
-                << std::endl;
-      continue;
-    }
-
-    TH1D *h1_EnxsNs = nullptr;
-    file->GetObject(Form("h1_EnxsNs_%d", chID), h1_EnxsNs);
-    if (!h1_EnxsNs) {
-      std::cerr << "  Warning: Channel " << chID << " EnxsNs histogram not found!"
-                << std::endl;
-      continue;
-    }
-
-    // Get flight length for this channel
-    double flight_length = 0.0;
-    auto it_len = channel_length.find(chID);
-    if (it_len != channel_length.end()) {
-      flight_length = it_len->second;
-    }
-    if (flight_length <= 0) {
-      std::cerr << "  Warning: Invalid flight length for channel " << chID
-                << std::endl;
-      continue;
-    }
-
-    std::vector<double> v_En;
-    std::vector<double> v_rcorr;
-    int nbins = h1->GetNbinsX();
-
-    // Process each bin
-    for (int bx = 1; bx <= nbins; bx++) {
-      double bin_center = h1->GetXaxis()->GetBinCenter(bx);
-      double bin_content = h1->GetBinContent(bx);
-
-      double E_left = h1->GetXaxis()->GetBinLowEdge(bx);
-      double E_right = h1->GetXaxis()->GetBinUpEdge(bx);
-
-      // Calculate TOF bin width in ns
-      double tof_left = calTOF(E_left, flight_length);
-      double tof_right = calTOF(E_right, flight_length);
-      double bin_width = fabs(tof_right - tof_left); // ns
-
-      // Calculate pulse rate per ns
-      double R_pulse = bin_content / (N_pulse * bin_width);
-
-      // Calculate pileup correction factor
-      double fcorr = 1.0;
-      if (tau * R_pulse < 1.0 && R_pulse > 0.) {
-        fcorr = 1.0 / (1.0 - tau * R_pulse);
-      }
-      h_corr_->SetBinContent(bx, fcorr);
-    }
-
-    int nbins_tof = h1_tof->GetNbinsX();
-    for (int bx = 1; bx <= nbins_tof; bx++) {
-      double bin_content = h1_tof->GetBinContent(bx);
-      double bin_width = h1_tof->GetBinWidth(bx); // ns
-
-      double R_pulse = bin_content / (N_pulse * bin_width);
-
-      double fcorr = 1.0;
-      if (tau * R_pulse < 1.0 && R_pulse > 0.) {
-        fcorr = 1.0 / (1.0 - tau * R_pulse);
-      }
-      ht_corr_->SetBinContent(bx, fcorr);
-    }
-
-    // Apply corrections
-    h1->Multiply(h_corr_);
-    h1_tof->Multiply(ht_corr_);
-    h1_Enxs->Multiply(h_corr_);
-    h1_EnxsNs->Multiply(h_corr_);
-
-    // Store histogram for plotting
-    m_h_corr[chID] = h_corr_;
-
-    frootcorr_out->cd();
-    h_corr_->Write();
-    ht_corr_->Write();
-
-    fhratepileup_out->cd();
-    h1->Write();
-    h1_tof->Write();
-    h1_Enxs->Write();
-    h1_EnxsNs->Write();
-  }
-  frootcorr_out->Close();
-  fhratepileup_out->Close();
-
-  std::cout << "  Saved pileup correction table to: " << pileup_corr_name
-            << std::endl;
-  std::cout << "  Saved pileup corrected histograms to: " << hratepileup_name
-            << std::endl;
-
-  // Create canvas and plot all h_corr_ histograms
-  if (!m_h_corr.empty()) {
-    TCanvas *c_corr =
-        new TCanvas("c_pileup_corr", "Pileup Correction Factors", 1200, 800);
-    c_corr->SetLogx();
-    c_corr->SetGridx();
-    c_corr->SetGridy();
-
-    // Define color palette for different channels
-    std::vector<int> colors = {kRed,      kBlue,       kGreen + 2, kMagenta,
-                               kCyan + 1, kOrange + 7, kViolet,    kTeal - 5,
-                               kPink + 1, kSpring - 5};
-
-    TLegend *leg = new TLegend(0.75, 0.6, 0.95, 0.9);
-    leg->SetBorderSize(1);
-    leg->SetFillStyle(0);
-
-    bool first = true;
-    int colorIdx = 0;
-
-    for (auto &[chID, h_corr] : m_h_corr) {
-      // Set histogram style
-      int color = colors[colorIdx % colors.size()];
-      h_corr->SetLineColor(color);
-      h_corr->SetLineWidth(2);
-      h_corr->SetStats(0);
-
-      // Set axis titles (only for first histogram)
-      if (first) {
-        h_corr->SetTitle(
-            "Pileup Correction Factors;Energy (eV);Correction Factor");
-        h_corr->GetYaxis()->SetRangeUser(0.9, 1.5);
-        h_corr->Draw("HIST");
-        first = false;
-      } else {
-        h_corr->Draw("HIST SAME");
+        colorIdx++;
       }
 
-      // Add to legend
-      leg->AddEntry(h_corr, Form("Channel %d", chID), "l");
+      leg->Draw();
+      c_corr->Update();
 
-      colorIdx++;
+      std::cout << std::endl;
+      std::cout << "Pileup correction factors plotted for " << m_h_corr.size()
+                << " channels" << std::endl;
+      std::cout << "Close plot window to continue..." << std::endl;
+      std::cout << std::endl;
     }
+  };
 
-    leg->Draw();
-    c_corr->Update();
+  std::cout << "\n=== Running GetPileupCorr for FIXM ===" << std::endl;
+  core_logic();
 
-    std::cout << std::endl;
-    std::cout << "Pileup correction factors plotted for " << m_h_corr.size()
-              << " channels" << std::endl;
-    std::cout << "Close plot window to continue..." << std::endl;
-    std::cout << std::endl;
+  if (m_configReader.GetDataType() == "Flux" && HasLiSiConfig()) {
+    SwitchToLiSi();
+    core_logic();
+    RestoreFromLiSi();
   }
 }
 
@@ -1432,296 +1504,311 @@ void RDataFrameAnalysis::CoincheckSingleBunch() {
 
   InitializeCommonConfig();
 
-  const std::string &dataDir = m_configReader.GetDataPath();
+  auto core_logic = [&]() {
+    const std::string &dataDir = m_configReader.GetDataPath();
 
-  std::cout << "Number of channels: " << m_channelIDs.size() << std::endl;
+    std::cout << "Number of channels: " << m_channelIDs.size() << std::endl;
 
-  // Build maps for channel data
-  std::map<int, std::string> m_samplename;
-  std::map<int, std::string> m_sampletype;
-  std::set<std::string> v_sample_typeuse;
+    // Build maps for channel data
+    std::map<int, std::string> m_samplename;
+    std::map<int, std::string> m_sampletype;
+    std::set<std::string> v_sample_typeuse;
 
-  // Maps for histograms
-  std::map<int, TH1D *> m_hratem;
-  std::map<int, TH1D *> m_hrate_norm;
-  std::map<int, TH1D *> m_hrate_re;
-  std::map<int, TH1D *> m_herror_rate;
-  std::map<int, TH1D *> m_hrate_re_norm;
-  std::map<int, TH1D *> m_hratio;
-  std::map<int, TH1D *> m_hratio_dec;
+    // Maps for histograms
+    std::map<int, TH1D *> m_hratem;
+    std::map<int, TH1D *> m_hrate_norm;
+    std::map<int, TH1D *> m_hrate_re;
+    std::map<int, TH1D *> m_herror_rate;
+    std::map<int, TH1D *> m_hrate_re_norm;
+    std::map<int, TH1D *> m_hratio;
+    std::map<int, TH1D *> m_hratio_dec;
 
-  // Open hratepileup.root and fluxattenuation.root files
-  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
-  std::string outparaPath = m_outputPath + m_expName + "/para";
-  std::string hratePath = outcomePath + "/hratepileup.root";
-  std::string fluxattenPath = outparaPath + "/fluxattenuation.root";
-  std::cout << "Opening hrate file: " << hratePath << std::endl;
-  std::unique_ptr<TFile> fin_hrate(TFile::Open(hratePath.c_str()));
-  if (!fin_hrate || fin_hrate->IsZombie()) {
-    std::cerr << "Error: Cannot open " << hratePath << std::endl;
-    return;
-  }
+    // Open hratepileup.root and fluxattenuation.root files
+    std::string outcomePath = m_outputPath + m_expName + "/Outcome";
+    std::string outparaPath = m_outputPath + m_expName + "/para";
+    std::string hratePath = outcomePath + "/hratepileup.root";
+    std::string fluxattenPath = outparaPath + "/fluxattenuation.root";
+    std::cout << "Opening hrate file: " << hratePath << std::endl;
+    std::unique_ptr<TFile> fin_hrate(TFile::Open(hratePath.c_str()));
+    if (!fin_hrate || fin_hrate->IsZombie()) {
+      std::cerr << "Error: Cannot open " << hratePath << std::endl;
+      return;
+    }
 
-  std::cout << "Opening flux attenuation file: " << fluxattenPath << std::endl;
-  std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
-  if (!fin_hatten || fin_hatten->IsZombie()) {
-    std::cerr << "Warning: Cannot open " << fluxattenPath
-              << ", flux attenuation correction will be skipped." << std::endl;
-    fin_hatten.reset(); // 保持 nullptr 状态，后续 if(hatten) 守卫会跳过修正
-  }
-
-  // Process each channel: build configuration maps and process histograms
-  for (int chID : m_channelIDs) {
-    std::cout << "Processing channel " << chID << "..." << std::endl;
-
-    // Get channel configuration
-    auto it = m_fixmConfig->Channels.find(chID);
-    if (it == m_fixmConfig->Channels.end()) {
-      std::cerr << "  Warning: Channel " << chID << " not found in config"
+    std::cout << "Opening flux attenuation file: " << fluxattenPath
+              << std::endl;
+    std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
+    if (!fin_hatten || fin_hatten->IsZombie()) {
+      std::cerr << "Warning: Cannot open " << fluxattenPath
+                << ", flux attenuation correction will be skipped."
                 << std::endl;
-      continue;
-    }
-    const auto &chConfig = it->second;
-
-    // Build configuration maps
-    m_sampletype[chID] = chConfig.SampleType;
-    auto DetID = chConfig.DetID;
-    std::string samplename =
-        chConfig.SampleType + std::to_string(chConfig.SampleNumber);
-    v_sample_typeuse.insert(chConfig.SampleType);
-    m_samplename[chID] = samplename;
-
-    // Calculate areal density
-    double sample_r = chConfig.Radius * mm_to_cm; // to cm
-    double sample_area = sample_r * sample_r * TMath::Pi();
-    double sample_t = chConfig.Mass / sample_area; // mg/cm2
-    double ArealDensity =
-        sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
-    double nd = ArealDensity;
-
-    // Get hrate histogram
-    TH1D *h1E = nullptr;
-    fin_hrate->GetObject(Form("h1_En_%d", chID), h1E);
-    if (!h1E) {
-      std::cerr << "  Warning: No histogram for channel " << chID << std::endl;
-      continue;
+      fin_hatten.reset(); // 保持 nullptr 状态，后续 if(hatten) 守卫会跳过修正
     }
 
-    auto hrate = (TH1D *)h1E->Clone(Form("hrate_%d", chID));
-
-    if (hrate == nullptr) {
-      continue;
-    }
-    TH1D *hatten = nullptr;
-    fin_hatten->GetObject(Form("htrans%d", DetID), hatten);
-
-    // Normalize by nd and efficiency
-    auto hrate_norm = (TH1D *)hrate->Clone(Form("hrate_norm_%d", chID));
-    hrate_norm->Scale(1.0 / nd / chConfig.DetEff);
-
-    m_hrate_norm[chID] = hrate_norm;
-
-    // Rebin
-    auto hrate_re = (TH1D *)hrate->Clone(Form("hrate_re_%d", chID));
-    if (hatten != nullptr) {
-      hrate_re->Divide(hatten);
-    }
-    hrate_re->Rebin(nrebin);
-    m_hrate_re[chID] = hrate_re;
-
-    // Calculate statistical error
-    auto herror_rate = (TH1D *)hrate_re->Clone(Form("herror_rate_%d", chID));
-    get_sta_errorhist(hrate_re, herror_rate);
-    m_herror_rate[chID] = herror_rate;
-
-    // Normalize re-binned histogram
-    auto hrate_re_norm =
-        (TH1D *)hrate_re->Clone(Form("hrate_re_norm_%d", chID));
-    hrate_re_norm->Scale(1.0 / nd / chConfig.DetEff);
-    m_hrate_re_norm[chID] = hrate_re_norm;
-  }
-
-  // Write normalized histograms to file
-  std::string foutPath = Form("%s/hrate_norm.root", outcomePath.c_str());
-  auto *fout_hrate_norm = new TFile(foutPath.c_str(), "recreate");
-  for (auto &ele_m : m_hrate_norm) {
-    ele_m.second->Write();
-  }
-  fout_hrate_norm->Close();
-  delete fout_hrate_norm;
-  std::cout << "Output file saved: " << foutPath << std::endl;
-
-  // 加载 ENDF 截面数据（与 CoincheckDoubleBunch 对齐）
-  InitializeEnergyBins();
-  if (!LoadSTDENDFData()) {
-    std::cerr << "Error: Failed to load ENDF data" << std::endl;
-    return;
-  }
-
-  // Draw — 按样品类型逐一作图
-  TCanvas *c = nullptr;
-  TLegend *legd = nullptr;
-
-  for (const auto &sample_typeuse : v_sample_typeuse) {
-    if (m_hrate_re_norm.empty())
-      continue;
-
-    // Canvas 1: 除以 ENDF 截面后画各通道 + 平均值线
-    c = new TCanvas();
-    gPad->SetLogx();
-    gPad->SetLogy();
-    legd = new TLegend();
-    auto hsum = (TH1D *)m_hrate_re_norm.begin()->second->Clone(
-        Form("hsum_%s", sample_typeuse.c_str()));
-    hsum->Reset();
-    int ihist = 0;
+    // Process each channel: build configuration maps and process histograms
     for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
-        continue;
+      std::cout << "Processing channel " << chID << "..." << std::endl;
 
-      auto h = m_hrate_re_norm[chID];
-      if (m_hxs_nr.find(m_sampletype[chID]) != m_hxs_nr.end() &&
-          m_hxs_nr[m_sampletype[chID]] != nullptr) {
-        h->Divide(m_hxs_nr[m_sampletype[chID]]);
+      // Get channel configuration
+      auto it = m_fixmConfig->Channels.find(chID);
+      if (it == m_fixmConfig->Channels.end()) {
+        std::cerr << "  Warning: Channel " << chID << " not found in config"
+                  << std::endl;
+        continue;
       }
-      h->SetLineColor(color[ihist % 10]);
-      hsum->Add(h);
-      ihist++;
-    }
+      const auto &chConfig = it->second;
 
-    auto havg = (TH1D *)hsum->Clone(Form("havg_%s", sample_typeuse.c_str()));
-    havg->SetLineColor(kBlack);
-    havg->SetLineWidth(2);
-    havg->Draw("hist");
-    legd->AddEntry(havg, "Average", "l");
+      // Build configuration maps
+      m_sampletype[chID] = chConfig.SampleType;
+      auto DetID = chConfig.DetID;
+      std::string samplename =
+          chConfig.SampleType + std::to_string(chConfig.SampleNumber);
+      v_sample_typeuse.insert(chConfig.SampleType);
+      m_samplename[chID] = samplename;
 
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
-        continue;
-      auto h = m_hrate_re_norm[chID];
-      h->DrawCopy("same hist");
-      legd->AddEntry(h, m_samplename[chID].c_str(), "l");
-    }
-    if (ihist > 0)
-      havg->Scale(1. / (double)ihist);
-    legd->Draw();
+      // Calculate areal density
+      double sample_r = chConfig.Radius * mm_to_cm; // to cm
+      double sample_area = sample_r * sample_r * TMath::Pi();
+      double sample_t = chConfig.Mass / sample_area; // mg/cm2
+      double ArealDensity =
+          sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
+      double nd = ArealDensity;
 
-    // Canvas 2: 各通道 / 平均值（比值）
-    c = new TCanvas();
-    gPad->SetLogx();
-    legd = new TLegend();
-    ihist = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
+      // Get hrate histogram
+      TH1D *h1E = nullptr;
+      fin_hrate->GetObject(Form("h1_En_%d", chID), h1E);
+      if (!h1E) {
+        std::cerr << "  Warning: No histogram for channel " << chID
+                  << std::endl;
         continue;
-      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
-        continue;
-
-      auto hratio = (TH1D *)m_hrate_re_norm[chID]->Clone(
-          Form("hratio_%s_%d", sample_typeuse.c_str(), chID));
-      hratio->SetYTitle("Ratio");
-      hratio->Divide(havg);
-      legd->AddEntry(hratio, m_samplename[chID].c_str(), "l");
-      m_hratio[chID] = hratio;
-      if (ihist == 0) {
-        hratio->Draw("hist");
-      } else {
-        hratio->Draw("hist same");
       }
-      ihist++;
-    }
-    legd->Draw();
 
-    // Canvas 3: 统计误差
-    c = new TCanvas();
-    gPad->SetLogx();
-    legd = new TLegend();
-    ihist = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_herror_rate.find(chID) == m_herror_rate.end())
-        continue;
+      auto hrate = (TH1D *)h1E->Clone(Form("hrate_%d", chID));
 
-      m_herror_rate[chID]->SetLineColor(color[ihist % 10]);
-      m_herror_rate[chID]->SetYTitle("Error");
-      if (ihist == 0) {
-        m_herror_rate[chID]->DrawCopy("hist");
-      } else {
-        m_herror_rate[chID]->DrawCopy("hist same");
+      if (hrate == nullptr) {
+        continue;
       }
-      legd->AddEntry(m_herror_rate[chID], m_samplename[chID].c_str(), "l");
-      ihist++;
+      TH1D *hatten = nullptr;
+      fin_hatten->GetObject(Form("htrans%d", DetID), hatten);
+
+      // Normalize by nd and efficiency
+      auto hrate_norm = (TH1D *)hrate->Clone(Form("hrate_norm_%d", chID));
+      hrate_norm->Scale(1.0 / nd / chConfig.DetEff);
+
+      m_hrate_norm[chID] = hrate_norm;
+
+      // Rebin
+      auto hrate_re = (TH1D *)hrate->Clone(Form("hrate_re_%d", chID));
+      if (hatten != nullptr) {
+        hrate_re->Divide(hatten);
+      }
+      hrate_re->Rebin(nrebin);
+      m_hrate_re[chID] = hrate_re;
+
+      // Calculate statistical error
+      auto herror_rate = (TH1D *)hrate_re->Clone(Form("herror_rate_%d", chID));
+      get_sta_errorhist(hrate_re, herror_rate);
+      m_herror_rate[chID] = herror_rate;
+
+      // Normalize re-binned histogram
+      auto hrate_re_norm =
+          (TH1D *)hrate_re->Clone(Form("hrate_re_norm_%d", chID));
+      hrate_re_norm->Scale(1.0 / nd / chConfig.DetEff);
+      m_hrate_re_norm[chID] = hrate_re_norm;
     }
-    legd->Draw();
 
-    // Canvas 4: 符合误差（实验标准差，与 CoincheckDoubleBunch 一致）
-    c = new TCanvas();
-    gPad->SetLogx();
-    auto gerror_coin = new TGraph();
+    // Write normalized histograms to file
+    std::string foutPath = Form("%s/hrate_norm.root", outcomePath.c_str());
+    auto *fout_hrate_norm = new TFile(foutPath.c_str(), "recreate");
+    for (auto &ele_m : m_hrate_norm) {
+      ele_m.second->Write();
+    }
+    fout_hrate_norm->Close();
+    delete fout_hrate_norm;
+    std::cout << "Output file saved: " << foutPath << std::endl;
 
-    int n_channels = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] == sample_typeuse &&
-          m_hrate_re_norm.find(chID) != m_hrate_re_norm.end())
-        n_channels++;
+    // 加载 ENDF 截面数据（与 CoincheckDoubleBunch 对齐）
+    InitializeEnergyBins();
+    if (!LoadSTDENDFData(nrebin)) {
+      std::cerr << "Error: Failed to load ENDF data" << std::endl;
+      return;
     }
 
-    for (int i = 0; i < havg->GetNbinsX(); i++) {
-      auto x = havg->GetBinCenter(i + 1);
-      double avg_val = havg->GetBinContent(i + 1);
-      if (avg_val <= 0)
+    // Draw — 按样品类型逐一作图
+    TCanvas *c = nullptr;
+    TLegend *legd = nullptr;
+
+    for (const auto &sample_typeuse : v_sample_typeuse) {
+      if (m_hrate_re_norm.empty())
         continue;
 
-      double sum_sq_diff = 0;
+      // Canvas 1: 除以 ENDF 截面后画各通道 + 平均值线
+      c = new TCanvas();
+      gPad->SetLogx();
+      gPad->SetLogy();
+      legd = new TLegend();
+      auto hsum = (TH1D *)m_hrate_re_norm.begin()->second->Clone(
+          Form("hsum_%s", sample_typeuse.c_str()));
+      hsum->Reset();
+      int ihist = 0;
       for (int chID : m_channelIDs) {
         if (m_sampletype[chID] != sample_typeuse)
           continue;
         if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
           continue;
 
-        double rate_k = m_hrate_re_norm[chID]->GetBinContent(i + 1);
-        if (rate_k > 0) {
-          double q_k = rate_k / avg_val;
-          sum_sq_diff += (q_k - 1.0) * (q_k - 1.0);
+        auto h = m_hrate_re_norm[chID];
+        if (m_hxs_nr.find(m_sampletype[chID]) != m_hxs_nr.end() &&
+            m_hxs_nr[m_sampletype[chID]] != nullptr) {
+          h->Divide(m_hxs_nr[m_sampletype[chID]]);
+        }
+        h->SetLineColor(color[ihist % 10]);
+        hsum->Add(h);
+        ihist++;
+      }
+
+      auto havg = (TH1D *)hsum->Clone(Form("havg_%s", sample_typeuse.c_str()));
+      havg->SetLineColor(kBlack);
+      havg->SetLineWidth(2);
+      havg->Draw("hist");
+      legd->AddEntry(havg, "Average", "l");
+
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+          continue;
+        auto h = m_hrate_re_norm[chID];
+        h->DrawCopy("same hist");
+        legd->AddEntry(h, m_samplename[chID].c_str(), "l");
+      }
+      if (ihist > 0)
+        havg->Scale(1. / (double)ihist);
+      legd->Draw();
+
+      // Canvas 2: 各通道 / 平均值（比值）
+      c = new TCanvas();
+      gPad->SetLogx();
+      legd = new TLegend();
+      ihist = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+          continue;
+
+        auto hratio = (TH1D *)m_hrate_re_norm[chID]->Clone(
+            Form("hratio_%s_%d", sample_typeuse.c_str(), chID));
+        hratio->SetYTitle("Ratio");
+        hratio->Divide(havg);
+        legd->AddEntry(hratio, m_samplename[chID].c_str(), "l");
+        m_hratio[chID] = hratio;
+        if (ihist == 0) {
+          hratio->Draw("hist");
+        } else {
+          hratio->Draw("hist same");
+        }
+        ihist++;
+      }
+      legd->Draw();
+
+      // Canvas 3: 统计误差
+      c = new TCanvas();
+      gPad->SetLogx();
+      legd = new TLegend();
+      ihist = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_herror_rate.find(chID) == m_herror_rate.end())
+          continue;
+
+        m_herror_rate[chID]->SetLineColor(color[ihist % 10]);
+        m_herror_rate[chID]->SetYTitle("Error");
+        if (ihist == 0) {
+          m_herror_rate[chID]->DrawCopy("hist");
+        } else {
+          m_herror_rate[chID]->DrawCopy("hist same");
+        }
+        legd->AddEntry(m_herror_rate[chID], m_samplename[chID].c_str(), "l");
+        ihist++;
+      }
+      legd->Draw();
+
+      // Canvas 4: 符合误差（实验标准差，与 CoincheckDoubleBunch 一致）
+      c = new TCanvas();
+      gPad->SetLogx();
+      auto gerror_coin = new TGraph();
+
+      int n_channels = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] == sample_typeuse &&
+            m_hrate_re_norm.find(chID) != m_hrate_re_norm.end())
+          n_channels++;
+      }
+
+      for (int i = 0; i < havg->GetNbinsX(); i++) {
+        auto x = havg->GetBinCenter(i + 1);
+        double avg_val = havg->GetBinContent(i + 1);
+        if (avg_val <= 0)
+          continue;
+
+        double sum_sq_diff = 0;
+        for (int chID : m_channelIDs) {
+          if (m_sampletype[chID] != sample_typeuse)
+            continue;
+          if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+            continue;
+
+          double rate_k = m_hrate_re_norm[chID]->GetBinContent(i + 1);
+          if (rate_k > 0) {
+            double q_k = rate_k / avg_val;
+            sum_sq_diff += (q_k - 1.0) * (q_k - 1.0);
+          }
+        }
+
+        if (n_channels > 1) {
+          double s_qk = std::sqrt(sum_sq_diff / (n_channels - 1));
+          double s_qbar = s_qk / std::sqrt(n_channels);
+          if (s_qbar > 0) {
+            gerror_coin->AddPoint(x, s_qbar);
+          }
         }
       }
 
-      if (n_channels > 1) {
-        double s_qk = std::sqrt(sum_sq_diff / (n_channels - 1));
-        double s_qbar = s_qk / std::sqrt(n_channels);
-        if (s_qbar > 0) {
-          gerror_coin->AddPoint(x, s_qbar);
-        }
+      auto herror_coin =
+          (TH1D *)havg->Clone(Form("herror_coin_%s", sample_typeuse.c_str()));
+      herror_coin->SetYTitle("Uncertainty");
+      gerror_coin->GetYaxis()->SetTitle("Uncertainty");
+      herror_coin->Reset();
+      graph2hist(gerror_coin, herror_coin);
+      herror_coin->Smooth();
+      herror_coin->Draw("hist");
+      herror_coin->SetLineColor(kRed);
+
+      // 写出符合效率文件（路径与 CoincheckDoubleBunch 对齐：Outcome/UN...）
+      std::string out_dat = Form("%s/UN%sCOINEFF.dat", outcomePath.c_str(),
+                                 sample_typeuse.c_str());
+      std::ofstream ofs(out_dat);
+      for (int i = 0; i < herror_coin->GetNbinsX(); i++) {
+        ofs << herror_coin->GetBinCenter(i + 1) << "\t"
+            << herror_coin->GetBinContent(i + 1) << std::endl;
       }
+      ofs.close();
+      std::cout << "  Saved coincidence efficiency to: " << out_dat
+                << std::endl;
+
+      delete gerror_coin;
     }
+  };
 
-    auto herror_coin =
-        (TH1D *)havg->Clone(Form("herror_coin_%s", sample_typeuse.c_str()));
-    herror_coin->SetYTitle("Uncertainty");
-    gerror_coin->GetYaxis()->SetTitle("Uncertainty");
-    herror_coin->Reset();
-    graph2hist(gerror_coin, herror_coin);
-    herror_coin->Smooth();
-    herror_coin->Draw("hist");
-    herror_coin->SetLineColor(kRed);
+  std::cout << "\n=== Running CoincheckSingleBunch for FIXM ===" << std::endl;
+  core_logic();
 
-    // 写出符合效率文件（路径与 CoincheckDoubleBunch 对齐：Outcome/UN...）
-    std::string out_dat =
-        Form("%s/UN%sCOINEFF.dat", outcomePath.c_str(), sample_typeuse.c_str());
-    std::ofstream ofs(out_dat);
-    for (int i = 0; i < herror_coin->GetNbinsX(); i++) {
-      ofs << herror_coin->GetBinCenter(i + 1) << "\t"
-          << herror_coin->GetBinContent(i + 1) << std::endl;
-    }
-    ofs.close();
-    std::cout << "  Saved coincidence efficiency to: " << out_dat << std::endl;
-
-    delete gerror_coin;
+  if (m_configReader.GetDataType() == "Flux" && HasLiSiConfig()) {
+    SwitchToLiSi();
+    core_logic();
+    RestoreFromLiSi();
   }
 
   PrintClosePrompt();
@@ -1742,272 +1829,200 @@ void RDataFrameAnalysis::Coincheck() {
 void RDataFrameAnalysis::CoincheckDoubleBunch() {
   PrintSectionHeader("CoincheckDoubleBunch Analysis");
 
-  int nrebin = 1;
+  int nrebin = m_configReader.GetNRebin();
   InitializeCommonConfig();
 
-  const std::string &dataDir = m_configReader.GetDataPath();
+  auto core_logic = [&]() {
+    const std::string &dataDir = m_configReader.GetDataPath();
 
-  std::cout << "Number of channels: " << m_channelIDs.size() << std::endl;
+    std::cout << "Number of channels: " << m_channelIDs.size() << std::endl;
 
-  std::map<int, double> m_tg;
-  std::map<int, double> m_length;
-  std::map<int, double> m_thres;
-  std::map<int, double> m_mass;
-  std::map<int, double> m_radius;
-  std::map<int, double> m_A;
-  std::map<int, double> m_nd;
-  std::map<int, double> m_eff;
-  std::map<int, int> m_detID;
-  std::map<int, std::vector<double>> m_fitres;
-  std::map<int, std::string> m_samplename;
-  std::map<int, std::string> m_sampletype;
-  std::set<std::string> v_sample_typeuse;
+    std::map<int, double> m_tg;
+    std::map<int, double> m_length;
+    std::map<int, double> m_thres;
+    std::map<int, double> m_mass;
+    std::map<int, double> m_radius;
+    std::map<int, double> m_A;
+    std::map<int, double> m_nd;
+    std::map<int, double> m_eff;
+    std::map<int, int> m_detID;
+    std::map<int, std::vector<double>> m_fitres;
+    std::map<int, std::string> m_samplename;
+    std::map<int, std::string> m_sampletype;
+    std::set<std::string> v_sample_typeuse;
 
-  for (int chID : m_channelIDs) {
-    auto it = m_fixmConfig->Channels.find(chID);
-    if (it == m_fixmConfig->Channels.end()) {
-      continue;
-    }
-    const auto &chConfig = it->second;
-
-    m_detID[chID] = chConfig.DetID;
-    m_tg[chID] = chConfig.Tg;
-    m_length[chID] = chConfig.Length;
-    m_thres[chID] = chConfig.Threshold;
-    int sampleid = chConfig.SampleNumber;
-    m_eff[chID] = chConfig.DetEff;
-    std::string sampletype = chConfig.SampleType;
-    std::string samplename = sampletype + std::to_string(sampleid);
-
-    v_sample_typeuse.insert(sampletype);
-    m_sampletype[chID] = sampletype;
-
-    m_fitres[chID] = chConfig.ThresholdEDivide;
-
-    double sample_m = chConfig.Mass;
-    double sample_r = chConfig.Radius / 10.; // to cm
-    double sample_area = sample_r * sample_r * TMath::Pi();
-    double sample_t = sample_m / sample_area; // mg/cm2
-    double sample_A = chConfig.A;
-
-    double ArealDensity =
-        sample_t / sample_A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
-    m_nd[chID] = ArealDensity;
-    m_samplename[chID] = samplename;
-  }
-
-  // Files
-  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
-  std::string paraPath = m_outputPath + m_expName + "/para/";
-  std::string hratePath = outcomePath + "/hratepileup.root";
-  std::string fluxattenPath = paraPath + "/fluxattenuation.root";
-
-  std::unique_ptr<TFile> fin_hrate(TFile::Open(hratePath.c_str()));
-  if (!fin_hrate || fin_hrate->IsZombie()) {
-    std::cerr << "Error: Cannot open " << hratePath << std::endl;
-    return;
-  }
-  std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
-  if (!fin_hatten || fin_hatten->IsZombie()) {
-    std::cerr << "Warning: Cannot open " << fluxattenPath
-              << ", flux attenuation correction will be skipped." << std::endl;
-    fin_hatten.reset(); // 保持 nullptr 状态，后续 if(htrans) 守卫会跳过修正
-  }
-
-  std::string hratexsufPath = outcomePath + "/hratexsuf.root";
-  std::unique_ptr<TFile> fin_hratexsuf(TFile::Open(hratexsufPath.c_str()));
-  if (!fin_hratexsuf || fin_hratexsuf->IsZombie()) {
-    std::cerr << "Error: Cannot open " << hratexsufPath << std::endl;
-    return;
-  }
-
-  std::map<int, TH1D *> m_hratem;
-  std::map<int, TH1D *> m_hrate_norm;
-  std::map<int, TH1D *> m_hrate_re;
-  std::map<int, TH1D *> m_herror_rate;
-  std::map<int, TH1D *> m_hrate_re_norm;
-  std::map<int, TH1D *> m_hratio;
-  std::map<int, TH1D *> m_hratio_dec;
-  std::map<int, TH1D *> h_hflux_atten;
-
-  for (int chID : m_channelIDs) {
-    TH1D *h1E = nullptr;
-    std::string name = Form("h1_En_%d", chID);
-    fin_hrate->GetObject(name.c_str(), h1E);
-    if (!h1E)
-      continue;
-
-    auto hrate = (TH1D *)h1E->Clone(Form("hrate_%d", chID));
-
-    TH1D *hrate_uf = nullptr;
-    fin_hratexsuf->GetObject(Form("h1_En_%d", chID), hrate_uf);
-    if (hrate != nullptr && hrate_uf != nullptr) {
-      auto hrate_m = (TH1D *)hrate_uf->Clone(Form("hrate_m_%d", chID));
-      for (int i = 0; i < hrate_m->FindBin(1e4) + 1; i++) {
-        hrate_m->SetBinContent(i + 1, hrate->GetBinContent(i + 1));
+    for (int chID : m_channelIDs) {
+      auto it = m_fixmConfig->Channels.find(chID);
+      if (it == m_fixmConfig->Channels.end()) {
+        continue;
       }
-      TH1D *htrans = nullptr;
-      std::string transname = Form("htrans%d", m_detID[chID]);
-      fin_hatten->GetObject(transname.c_str(), htrans);
-      if (htrans)
-        hrate_m->Divide(htrans);
-      m_hratem[chID] = hrate_m;
+      const auto &chConfig = it->second;
 
-      auto hrate_norm = (TH1D *)hrate_m->Clone(Form("hrate_norm_%d", chID));
-      hrate_norm->Scale(1. / m_nd[chID] / m_eff[chID]);
-      m_hrate_norm[chID] = hrate_norm;
+      m_detID[chID] = chConfig.DetID;
+      m_tg[chID] = chConfig.Tg;
+      m_length[chID] = chConfig.Length;
+      m_thres[chID] = chConfig.Threshold;
+      int sampleid = chConfig.SampleNumber;
+      m_eff[chID] = chConfig.DetEff;
+      std::string sampletype = chConfig.SampleType;
+      std::string samplename = sampletype + std::to_string(sampleid);
 
-      auto hrate_re = (TH1D *)hrate_m->Clone(Form("hrate_re_%d", chID));
-      hrate_re->Rebin(nrebin);
-      m_hrate_re[chID] = hrate_re;
+      v_sample_typeuse.insert(sampletype);
+      m_sampletype[chID] = sampletype;
 
-      auto herror_rate = (TH1D *)hrate_re->Clone(Form("herror_rate_%d", chID));
-      get_sta_errorhist(hrate_re, herror_rate);
-      m_herror_rate[chID] = herror_rate;
+      m_fitres[chID] = chConfig.ThresholdEDivide;
 
-      auto hrate_re_norm =
-          (TH1D *)hrate_re->Clone(Form("hrate_re_norm_%d", chID));
-      hrate_re_norm->Scale(1. / m_nd[chID] / m_eff[chID]);
-      m_hrate_re_norm[chID] = hrate_re_norm;
-    } else {
-      std::cout << "rate calculate no hist id = " << chID << std::endl;
-    }
-  }
+      double sample_m = chConfig.Mass;
+      double sample_r = chConfig.Radius / 10.; // to cm
+      double sample_area = sample_r * sample_r * TMath::Pi();
+      double sample_t = sample_m / sample_area; // mg/cm2
+      double sample_A = chConfig.A;
 
-  // get ENDF DATA
-  InitializeEnergyBins();
-  if (!LoadSTDENDFData()) {
-    std::cerr << "Error: Failed to load ENDF data" << std::endl;
-    return;
-  }
-
-  // Write
-  std::string foutPath = Form("%s/hrate_norm.root", outcomePath.c_str());
-  auto *fout_hrate_norm = new TFile(foutPath.c_str(), "recreate");
-  for (auto ele_m : m_hrate_norm) {
-    int chid = ele_m.first;
-    ele_m.second->Write();
-    if (m_hratem.find(chid) != m_hratem.end()) {
-      m_hratem[chid]->Write();
-    }
-  }
-  fout_hrate_norm->Close();
-  delete fout_hrate_norm;
-
-  // Draw
-  TCanvas *c = nullptr;
-  TLegend *legd = nullptr;
-
-  for (const auto &sample_typeuse : v_sample_typeuse) {
-    if (m_hrate_re_norm.empty())
-      continue;
-
-    c = new TCanvas();
-    gPad->SetLogx();
-    gPad->SetLogy();
-    legd = new TLegend();
-    auto hsum = (TH1D *)m_hrate_re_norm.begin()->second->Clone(
-        Form("hsum_%s", sample_typeuse.c_str()));
-    hsum->Reset();
-    int ihist = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
-        continue;
-
-      auto h = m_hrate_re_norm[chID];
-      if (m_hxs_nr.find(m_sampletype[chID]) != m_hxs_nr.end() &&
-          m_hxs_nr[m_sampletype[chID]] != nullptr) {
-        h->Divide(m_hxs_nr[m_sampletype[chID]]);
-      }
-      h->SetLineColor(color[ihist % 10]);
-      hsum->Add(h);
-      ihist++;
+      double ArealDensity =
+          sample_t / sample_A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
+      m_nd[chID] = ArealDensity;
+      m_samplename[chID] = samplename;
     }
 
-    auto havg = (TH1D *)hsum->Clone(Form("havg_%s", sample_typeuse.c_str()));
+    // Files
+    std::string outcomePath = m_outputPath + m_expName + "/Outcome";
+    std::string paraPath = m_outputPath + m_expName + "/para/";
+    std::string hratePath = outcomePath + "/hratepileup.root";
+    std::string fluxattenPath = paraPath + "/fluxattenuation.root";
 
-    havg->SetLineColor(kBlack);
-    havg->SetLineWidth(2);
-    havg->Draw("hist");
-    legd->AddEntry(havg, "Average", "l");
+    std::unique_ptr<TFile> fin_hrate(TFile::Open(hratePath.c_str()));
+    if (!fin_hrate || fin_hrate->IsZombie()) {
+      std::cerr << "Error: Cannot open " << hratePath << std::endl;
+      return;
+    }
+    std::unique_ptr<TFile> fin_hatten(TFile::Open(fluxattenPath.c_str()));
+    if (!fin_hatten || fin_hatten->IsZombie()) {
+      std::cerr << "Warning: Cannot open " << fluxattenPath
+                << ", flux attenuation correction will be skipped."
+                << std::endl;
+      fin_hatten.reset(); // 保持 nullptr 状态，后续 if(htrans) 守卫会跳过修正
+    }
+
+    std::string hratexsufPath = outcomePath + "/hratexsuf.root";
+    std::unique_ptr<TFile> fin_hratexsuf(TFile::Open(hratexsufPath.c_str()));
+    if (!fin_hratexsuf || fin_hratexsuf->IsZombie()) {
+      std::cerr << "Error: Cannot open " << hratexsufPath << std::endl;
+      return;
+    }
+
+    std::map<int, TH1D *> m_hratem;
+    std::map<int, TH1D *> m_hrate_norm;
+    std::map<int, TH1D *> m_hrate_re;
+    std::map<int, TH1D *> m_herror_rate;
+    std::map<int, TH1D *> m_hrate_re_norm;
+    std::map<int, TH1D *> m_hratio;
+    std::map<int, TH1D *> m_hratio_dec;
+    std::map<int, TH1D *> h_hflux_atten;
 
     for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
-        continue;
-
-      auto h = m_hrate_re_norm[chID];
-      h->DrawCopy("same hist");
-      legd->AddEntry(h, m_samplename[chID].c_str(), "l");
-    }
-    if (ihist > 0)
-      havg->Scale(1. / (double)ihist);
-    legd->Draw();
-
-    c = new TCanvas();
-    gPad->SetLogx();
-    legd = new TLegend();
-    ihist = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+      TH1D *h1E = nullptr;
+      std::string name = Form("h1_En_%d", chID);
+      fin_hrate->GetObject(name.c_str(), h1E);
+      if (!h1E)
         continue;
 
-      auto hratio = (TH1D *)m_hrate_re_norm[chID]->Clone(
-          Form("hratio_%s_%d", sample_typeuse.c_str(), chID));
-      hratio->SetYTitle("Ratio");
-      hratio->Divide(havg);
-      legd->AddEntry(hratio, m_samplename[chID].c_str(), "l");
-      m_hratio[chID] = hratio;
-      if (ihist == 0) {
-        hratio->Draw("hist");
+      auto hrate = (TH1D *)h1E->Clone(Form("hrate_%d", chID));
+
+      TH1D *hrate_uf = nullptr;
+      fin_hratexsuf->GetObject(Form("h1_En_%d", chID), hrate_uf);
+      if (hrate != nullptr && hrate_uf != nullptr) {
+        auto hrate_m = (TH1D *)hrate_uf->Clone(Form("hrate_m_%d", chID));
+        for (int i = 0; i < hrate_m->FindBin(1e4) + 1; i++) {
+          hrate_m->SetBinContent(i + 1, hrate->GetBinContent(i + 1));
+        }
+        TH1D *htrans = nullptr;
+        std::string transname = Form("htrans%d", m_detID[chID]);
+        fin_hatten->GetObject(transname.c_str(), htrans);
+        if (htrans)
+          hrate_m->Divide(htrans);
+        m_hratem[chID] = hrate_m;
+
+        auto hrate_norm = (TH1D *)hrate_m->Clone(Form("hrate_norm_%d", chID));
+        hrate_norm->Scale(1. / m_nd[chID] / m_eff[chID]);
+        m_hrate_norm[chID] = hrate_norm;
+
+        auto hrate_re = (TH1D *)hrate_m->Clone(Form("hrate_re_%d", chID));
+        hrate_re->Rebin(nrebin);
+        m_hrate_re[chID] = hrate_re;
+
+        auto herror_rate =
+            (TH1D *)hrate_re->Clone(Form("herror_rate_%d", chID));
+        get_sta_errorhist(hrate_re, herror_rate);
+        m_herror_rate[chID] = herror_rate;
+
+        auto hrate_re_norm =
+            (TH1D *)hrate_re->Clone(Form("hrate_re_norm_%d", chID));
+        hrate_re_norm->Scale(1. / m_nd[chID] / m_eff[chID]);
+        m_hrate_re_norm[chID] = hrate_re_norm;
       } else {
-        hratio->Draw("hist same");
+        std::cout << "rate calculate no hist id = " << chID << std::endl;
       }
-      ihist++;
     }
-    legd->Draw();
 
-    c = new TCanvas();
-    gPad->SetLogx();
-    legd = new TLegend();
-    ihist = 0;
-    for (int chID : m_channelIDs) {
-      if (m_sampletype[chID] != sample_typeuse)
-        continue;
-      if (m_herror_rate.find(chID) == m_herror_rate.end())
-        continue;
+    // get ENDF DATA
+    InitializeEnergyBins();
+    if (!LoadSTDENDFData(nrebin)) {
+      std::cerr << "Error: Failed to load ENDF data" << std::endl;
+      return;
+    }
 
-      m_herror_rate[chID]->SetLineColor(color[ihist % 10]);
-      m_herror_rate[chID]->SetYTitle("Error");
 
-      if (ihist == 0) {
-        m_herror_rate[chID]->DrawCopy("hist");
-      } else {
-        m_herror_rate[chID]->DrawCopy("hist same");
+    // Write
+    std::string foutPath = Form("%s/hrate_norm.root", outcomePath.c_str());
+    auto *fout_hrate_norm = new TFile(foutPath.c_str(), "recreate");
+    for (auto ele_m : m_hrate_norm) {
+      int chid = ele_m.first;
+      ele_m.second->Write();
+      if (m_hratem.find(chid) != m_hratem.end()) {
+        m_hratem[chid]->Write();
       }
-      legd->AddEntry(m_herror_rate[chID], m_samplename[chID].c_str(), "l");
-      ihist++;
     }
-    legd->Draw();
+    fout_hrate_norm->Close();
+    delete fout_hrate_norm;
 
-    c = new TCanvas();
-    gPad->SetLogx();
-    auto gerror_coin = new TGraph();
+    // Draw
+    TCanvas *c = nullptr;
+    TLegend *legd = nullptr;
 
-    int n_channels = m_hrate_re_norm.size();
-
-    for (int i = 0; i < havg->GetNbinsX(); i++) {
-      auto x = havg->GetBinCenter(i + 1);
-      double avg_val = havg->GetBinContent(i + 1);
-      if (avg_val <= 0)
+    for (const auto &sample_typeuse : v_sample_typeuse) {
+      if (m_hrate_re_norm.empty())
         continue;
 
-      double sum_sq_diff = 0;
+      c = new TCanvas();
+      gPad->SetLogx();
+      gPad->SetLogy();
+      legd = new TLegend();
+      auto hsum = (TH1D *)m_hrate_re_norm.begin()->second->Clone(
+          Form("hsum_%s", sample_typeuse.c_str()));
+      hsum->Reset();
+      int ihist = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+          continue;
+
+        auto h = m_hrate_re_norm[chID];
+        if (m_hxs_nr.find(m_sampletype[chID]) != m_hxs_nr.end() &&
+            m_hxs_nr[m_sampletype[chID]] != nullptr) {
+          h->Divide(m_hxs_nr[m_sampletype[chID]]);
+        }
+        h->SetLineColor(color[ihist % 10]);
+        hsum->Add(h);
+        ihist++;
+      }
+
+      auto havg = (TH1D *)hsum->Clone(Form("havg_%s", sample_typeuse.c_str()));
+
+      havg->SetLineColor(kBlack);
+      havg->SetLineWidth(2);
+      havg->Draw("hist");
+      legd->AddEntry(havg, "Average", "l");
 
       for (int chID : m_channelIDs) {
         if (m_sampletype[chID] != sample_typeuse)
@@ -2015,43 +2030,129 @@ void RDataFrameAnalysis::CoincheckDoubleBunch() {
         if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
           continue;
 
-        double rate_k = m_hrate_re_norm[chID]->GetBinContent(i + 1);
-        if (rate_k > 0) {
-          double q_k = rate_k / avg_val;
-          // q_bar is theoretically 1 since havg is the average of
-          // m_hrate_re_norm
-          sum_sq_diff += (q_k - 1.0) * (q_k - 1.0);
+        auto h = m_hrate_re_norm[chID];
+        h->DrawCopy("same hist");
+        legd->AddEntry(h, m_samplename[chID].c_str(), "l");
+      }
+      if (ihist > 0)
+        havg->Scale(1. / (double)ihist);
+      legd->Draw();
+
+      c = new TCanvas();
+      gPad->SetLogx();
+      legd = new TLegend();
+      ihist = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+          continue;
+
+        auto hratio = (TH1D *)m_hrate_re_norm[chID]->Clone(
+            Form("hratio_%s_%d", sample_typeuse.c_str(), chID));
+        hratio->SetYTitle("Ratio");
+        hratio->Divide(havg);
+        legd->AddEntry(hratio, m_samplename[chID].c_str(), "l");
+        m_hratio[chID] = hratio;
+        if (ihist == 0) {
+          hratio->Draw("hist");
+        } else {
+          hratio->Draw("hist same");
+        }
+        ihist++;
+      }
+      legd->Draw();
+
+      c = new TCanvas();
+      gPad->SetLogx();
+      legd = new TLegend();
+      ihist = 0;
+      for (int chID : m_channelIDs) {
+        if (m_sampletype[chID] != sample_typeuse)
+          continue;
+        if (m_herror_rate.find(chID) == m_herror_rate.end())
+          continue;
+
+        m_herror_rate[chID]->SetLineColor(color[ihist % 10]);
+        m_herror_rate[chID]->SetYTitle("Error");
+
+        if (ihist == 0) {
+          m_herror_rate[chID]->DrawCopy("hist");
+        } else {
+          m_herror_rate[chID]->DrawCopy("hist same");
+        }
+        legd->AddEntry(m_herror_rate[chID], m_samplename[chID].c_str(), "l");
+        ihist++;
+      }
+      legd->Draw();
+
+      c = new TCanvas();
+      gPad->SetLogx();
+      auto gerror_coin = new TGraph();
+
+      int n_channels = m_hrate_re_norm.size();
+
+      for (int i = 0; i < havg->GetNbinsX(); i++) {
+        auto x = havg->GetBinCenter(i + 1);
+        double avg_val = havg->GetBinContent(i + 1);
+        if (avg_val <= 0)
+          continue;
+
+        double sum_sq_diff = 0;
+
+        for (int chID : m_channelIDs) {
+          if (m_sampletype[chID] != sample_typeuse)
+            continue;
+          if (m_hrate_re_norm.find(chID) == m_hrate_re_norm.end())
+            continue;
+
+          double rate_k = m_hrate_re_norm[chID]->GetBinContent(i + 1);
+          if (rate_k > 0) {
+            double q_k = rate_k / avg_val;
+            // q_bar is theoretically 1 since havg is the average of
+            // m_hrate_re_norm
+            sum_sq_diff += (q_k - 1.0) * (q_k - 1.0);
+          }
+        }
+
+        if (n_channels > 1) {
+          double s_qk = std::sqrt(sum_sq_diff / (n_channels - 1));
+          double s_qbar = s_qk / std::sqrt(n_channels);
+          if (s_qbar > 0) {
+            gerror_coin->AddPoint(x, s_qbar);
+          }
         }
       }
+      auto herror_coin =
+          (TH1D *)havg->Clone(Form("herror_coin_%s", sample_typeuse.c_str()));
+      herror_coin->SetYTitle("Uncertainty");
+      gerror_coin->GetYaxis()->SetTitle("Uncertainty");
+      herror_coin->Reset();
+      graph2hist(gerror_coin, herror_coin);
+      herror_coin->Smooth();
+      herror_coin->Draw("hist");
+      herror_coin->SetLineColor(kRed);
 
-      if (n_channels > 1) {
-        double s_qk = std::sqrt(sum_sq_diff / (n_channels - 1));
-        double s_qbar = s_qk / std::sqrt(n_channels);
-        if (s_qbar > 0) {
-          gerror_coin->AddPoint(x, s_qbar);
-        }
+      std::string out_dat = Form("%s/UN%sCOINEFF.dat", outcomePath.c_str(),
+                                 sample_typeuse.c_str());
+      std::ofstream ofs(out_dat);
+      for (int i = 0; i < herror_coin->GetNbinsX(); i++) {
+        ofs << herror_coin->GetBinCenter(i + 1) << "\t"
+            << herror_coin->GetBinContent(i + 1) << std::endl;
       }
-    }
-    auto herror_coin =
-        (TH1D *)havg->Clone(Form("herror_coin_%s", sample_typeuse.c_str()));
-    herror_coin->SetYTitle("Uncertainty");
-    gerror_coin->GetYaxis()->SetTitle("Uncertainty");
-    herror_coin->Reset();
-    graph2hist(gerror_coin, herror_coin);
-    herror_coin->Smooth();
-    herror_coin->Draw("hist");
-    herror_coin->SetLineColor(kRed);
+      ofs.close();
 
-    std::string out_dat =
-        Form("%s/UN%sCOINEFF.dat", outcomePath.c_str(), sample_typeuse.c_str());
-    std::ofstream ofs(out_dat);
-    for (int i = 0; i < herror_coin->GetNbinsX(); i++) {
-      ofs << herror_coin->GetBinCenter(i + 1) << "\t"
-          << herror_coin->GetBinContent(i + 1) << std::endl;
+      delete gerror_coin;
     }
-    ofs.close();
+  };
 
-    delete gerror_coin;
+  std::cout << "\n=== Running CoincheckDoubleBunch for FIXM ===" << std::endl;
+  core_logic();
+
+  if (m_configReader.GetDataType() == "Flux" && HasLiSiConfig()) {
+    SwitchToLiSi();
+    core_logic();
+    RestoreFromLiSi();
   }
 
   PrintClosePrompt();
@@ -2093,7 +2194,8 @@ void RDataFrameAnalysis::CountT0() {
   // Proton beam data loading (before per-file loop so fTime can be printed)
   // ========================================================
   const std::string &beamDataPath = m_configReader.GetBeamDataPath();
-  int experimentTime = m_configReader.GetExperimentTime();
+  int experimentTimeStart = m_configReader.GetExperimentTimeStart();
+  int experimentTimeEnd = m_configReader.GetExperimentTimeEnd();
   double BeamPowerW = m_configReader.GetBeamPower() * 1000.0; // kW -> W
   double ProtonEnergy = m_configReader.GetProtonEnergy();     // eV
 
@@ -2111,11 +2213,8 @@ void RDataFrameAnalysis::CountT0() {
   // Proton data vector: (ns_timestamp, flow)
   std::vector<std::pair<ULong64_t, Long64_t>> protonData;
 
-  if (experimentTime != 0 && BeamPowerW > 0 && ProtonEnergy > 0) {
-    std::string protonFilePath =
-        beamDataPath + "/proton_" + std::to_string(experimentTime) + ".txt";
-    std::cout << "Reading proton data from: " << protonFilePath << std::endl;
-
+  if (experimentTimeStart != 0 && experimentTimeEnd != 0 && BeamPowerW > 0 &&
+      ProtonEnergy > 0) {
     // Scan chain for global time bounds to filter proton file
     ULong64_t tMin_global = std::numeric_limits<ULong64_t>::max();
     ULong64_t tMax_global = 0;
@@ -2142,7 +2241,11 @@ void RDataFrameAnalysis::CountT0() {
     std::cout << "  Number of protons cut: " << nproton_cut << std::endl;
     // Stream-read proton file, only keeping rows in [tMin_global, tMax_global]
     protonData.reserve(1 << 20);
-    {
+    Long64_t totalLineCount = 0;
+    for (int t = experimentTimeStart; t <= experimentTimeEnd;) {
+      std::string protonFilePath =
+          beamDataPath + "proton_" + std::to_string(t) + ".txt";
+      std::cout << "Reading proton data from: " << protonFilePath << std::endl;
       std::ifstream protonFile(protonFilePath);
       if (!protonFile.is_open()) {
         std::cerr << "Warning: Cannot open proton data file: " << protonFilePath
@@ -2171,17 +2274,29 @@ void RDataFrameAnalysis::CountT0() {
           }
         }
         protonFile.close();
-        std::sort(
-            protonData.begin(), protonData.end(),
-            [](const auto &a, const auto &b) { return a.first < b.first; });
+        totalLineCount += lineCount;
         std::cout << "  Loaded " << lineCount << " proton data points"
                   << std::endl;
       }
+      int year = t / 100;
+      int month = t % 100;
+      if (month == 12) {
+        year++;
+        month = 1;
+      } else {
+        month++;
+      }
+      t = year * 100 + month;
     }
-  } else {
-    std::cerr << "Warning: ExperimentTime/BeamPower/ProtonEnergy not set, "
-                 "skipping proton fTime output"
+    std::sort(protonData.begin(), protonData.end(),
+              [](const auto &a, const auto &b) { return a.first < b.first; });
+    std::cout << "  Loaded total " << totalLineCount << " proton data points"
               << std::endl;
+  } else {
+    std::cerr
+        << "Warning: ExperimentTimeStart/End/BeamPower/ProtonEnergy not set, "
+           "skipping proton fTime output"
+        << std::endl;
   }
 
   // Helper lambda: compute fTime for a given [fileMin, fileMax] from protonData
@@ -2461,346 +2576,364 @@ void RDataFrameAnalysis::GetHRateXSUF() {
   PrintSectionHeader("GetHRateXSUF Analysis");
 
   InitializeCommonConfig();
+  InitializeEnergyBins();
 
-  // Get ntimes from configuration
-  double ntimes = m_fixmConfig->Global.UFRandomTimes;
+  auto core_logic = [&]() {
+    // Get ntimes from configuration
+    double ntimes = m_fixmConfig->Global.UFRandomTimes;
 
-  std::cout << "Number of channels to analyze: " << m_channelIDs.size()
-            << std::endl;
-  std::cout << "Monte Carlo sampling factor: " << ntimes << std::endl;
+    std::cout << "Number of channels to analyze: " << m_channelIDs.size()
+              << std::endl;
+    std::cout << "Monte Carlo sampling factor: " << ntimes << std::endl;
 
-  // Load ENDF data using existing member function
-  if (!LoadSTDENDFData()) {
-    std::cerr << "Error: Failed to load ENDF data" << std::endl;
-    return;
-  }
-
-  // Get outcome path from configuration
-  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
-
-  // Create maps for sample information
-  std::map<int, std::string> m_sampletype;
-  std::map<int, double> m_nd;
-
-  // Fill sample information from configuration
-  for (const auto &[chID, chConfig] : m_fixmConfig->Channels) {
-    m_sampletype[chID] = chConfig.SampleType;
-
-    // Calculate areal density
-    double sample_r = chConfig.Radius * mm_to_cm; // to cm
-    double sample_area = sample_r * sample_r * TMath::Pi();
-    double sample_t = chConfig.Mass / sample_area; // mg/cm2
-    double ArealDensity =
-        sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
-    m_nd[chID] = ArealDensity;
-  }
-
-  // Delta L cache is pre-loaded in InitializeCommonConfig
-  auto endeltaL = m_endeltaL;
-  double avgDL = m_avgDL;
-
-  // Lambda function to calculate hrate (only En)
-  auto calhrate = [this, endeltaL, avgDL](TH1D *hrate, TH1D *hrateout, int chid,
-                                          double /*ntimes*/) {
-    hrateout->Reset();
-
-    // Get channel length
-    auto it_ch = m_fixmConfig->Channels.find(chid);
-    if (it_ch == m_fixmConfig->Channels.end())
+    // Load ENDF data using existing member function
+    if (!LoadSTDENDFData()) {
+      std::cerr << "Error: Failed to load ENDF data" << std::endl;
       return;
-    double Length = it_ch->second.Length;
-    double Lengthgeo = Length - avgDL;
+    }
 
-    double EnCutHigh = m_configReader.GetEnergyCutHigh();
-    const int nsub = m_fixmConfig->Global.Intergralnsub;
+    // Get outcome path from configuration
+    std::string outcomePath = m_outputPath + m_expName + "/Outcome";
 
-    for (int ibin_out = 1; ibin_out <= hrateout->GetNbinsX(); ibin_out++) {
-      double En_lo = hrateout->GetBinLowEdge(ibin_out);
-      double En_hi = En_lo + hrateout->GetBinWidth(ibin_out);
+    // Create maps for sample information
+    std::map<int, std::string> m_sampletype;
+    std::map<int, double> m_nd;
 
-      if (En_lo > EnCutHigh)
-        continue;
+    // Fill sample information from configuration
+    for (const auto &[chID, chConfig] : m_fixmConfig->Channels) {
+      m_sampletype[chID] = chConfig.SampleType;
 
-      // En -> TOF (note: low energy corresponds to high TOF)
-      double tof_hi = calTOF(En_lo, Length);
-      double tof_lo = calTOF(En_hi, Length);
+      // Calculate areal density
+      double sample_r = chConfig.Radius * mm_to_cm; // to cm
+      double sample_area = sample_r * sample_r * TMath::Pi();
+      double sample_t = chConfig.Mass / sample_area; // mg/cm2
+      double ArealDensity =
+          sample_t / chConfig.A * Na * barn_to_cm2 * mg_to_g; // atoms/barn
+      m_nd[chID] = ArealDensity;
+    }
 
-      double sum_weight = 0.0;
-      double dtof = (tof_hi - tof_lo) / nsub;
+    // Delta L cache is pre-loaded in InitializeCommonConfig
+    auto endeltaL = m_endeltaL;
+    double avgDL = m_avgDL;
 
-      for (int isub = 0; isub < nsub; isub++) {
-        double tof = tof_lo + dtof * (isub + 0.5);
+    // Lambda function to calculate hrate (only En)
+    auto calhrate = [this, endeltaL, avgDL](TH1D *hrate, TH1D *hrateout,
+                                            int chid, double /*ntimes*/) {
+      hrateout->Reset();
 
-        int bin_in = hrate->FindBin(tof);
-        double density = hrate->GetBinContent(bin_in) / hrate->GetBinWidth(bin_in);
-        if (density <= 0)
+      // Get channel length
+      auto it_ch = m_fixmConfig->Channels.find(chid);
+      if (it_ch == m_fixmConfig->Channels.end())
+        return;
+      double Length = it_ch->second.Length;
+      double Lengthgeo = Length - avgDL;
+
+      double EnCutHigh = m_configReader.GetEnergyCutHigh();
+      const int nsub = m_fixmConfig->Global.Intergralnsub;
+
+      for (int ibin_out = 1; ibin_out <= hrateout->GetNbinsX(); ibin_out++) {
+        double En_lo = hrateout->GetBinLowEdge(ibin_out);
+        double En_hi = En_lo + hrateout->GetBinWidth(ibin_out);
+
+        if (En_lo > EnCutHigh)
           continue;
 
-        double En = -1e6;
-        double length = Length;
-        for (size_t j = 0; j < 3; j++) {
-          En = calEn(tof, length);
-          length = Lengthgeo + endeltaL->Eval(En);
+        // En -> TOF (note: low energy corresponds to high TOF)
+        double tof_hi = calTOF(En_lo, Length);
+        double tof_lo = calTOF(En_hi, Length);
+
+        double sum_weight = 0.0;
+        double dtof = (tof_hi - tof_lo) / nsub;
+
+        for (int isub = 0; isub < nsub; isub++) {
+          double tof = tof_lo + dtof * (isub + 0.5);
+
+          int bin_in = hrate->FindBin(tof);
+          double density =
+              hrate->GetBinContent(bin_in) / hrate->GetBinWidth(bin_in);
+          if (density <= 0)
+            continue;
+
+          double En = -1e6;
+          double length = Length;
+          for (size_t j = 0; j < 3; j++) {
+            En = calEn(tof, length);
+            length = Lengthgeo + endeltaL->Eval(En);
+          }
+
+          if (En <= EnCutHigh) {
+            sum_weight += density * dtof;
+          }
         }
 
-        if (En <= EnCutHigh) {
-          sum_weight += density * dtof;
-        }
+        hrateout->SetBinContent(ibin_out, sum_weight);
       }
+    };
 
-      hrateout->SetBinContent(ibin_out, sum_weight);
-    }
-  };
+    // Lambda function to calculate hratexs (without self-shielding correction)
+    // Use member variable m_xs_nr instead of local m_xs_nf
+    auto calhratexs = [this, &m_sampletype, endeltaL,
+                       avgDL](TH1D *hrate, TH1D *hratexs, int chid,
+                              double /*ntimes*/) {
+      hratexs->Reset();
+      auto sampletype = m_sampletype[chid];
 
-  // Lambda function to calculate hratexs (without self-shielding correction)
-  // Use member variable m_xs_nr instead of local m_xs_nf
-  auto calhratexs = [this, &m_sampletype, endeltaL, avgDL](
-                        TH1D *hrate, TH1D *hratexs, int chid, double /*ntimes*/) {
-    hratexs->Reset();
-    auto sampletype = m_sampletype[chid];
+      // Get channel length
+      auto it_ch = m_fixmConfig->Channels.find(chid);
+      if (it_ch == m_fixmConfig->Channels.end())
+        return;
+      double Length = it_ch->second.Length;
+      double Lengthgeo = Length - avgDL;
 
-    // Get channel length
-    auto it_ch = m_fixmConfig->Channels.find(chid);
-    if (it_ch == m_fixmConfig->Channels.end())
-      return;
-    double Length = it_ch->second.Length;
-    double Lengthgeo = Length - avgDL;
+      // Use member variable m_xs_nr
+      auto it = m_xs_nr.find(sampletype);
+      if (it == m_xs_nr.end()) {
+        std::cerr << "  Warning: No cross section data for sample type "
+                  << sampletype << std::endl;
+        return;
+      }
+      auto gENDFNF = it->second;
 
-    // Use member variable m_xs_nr
-    auto it = m_xs_nr.find(sampletype);
-    if (it == m_xs_nr.end()) {
-      std::cerr << "  Warning: No cross section data for sample type "
-                << sampletype << std::endl;
-      return;
-    }
-    auto gENDFNF = it->second;
+      double EnCutHigh = m_configReader.GetEnergyCutHigh();
+      const int nsub = m_fixmConfig->Global.Intergralnsub;
 
-    double EnCutHigh = m_configReader.GetEnergyCutHigh();
-    const int nsub = m_fixmConfig->Global.Intergralnsub;
+      for (int ibin_out = 1; ibin_out <= hratexs->GetNbinsX(); ibin_out++) {
+        double En_lo = hratexs->GetBinLowEdge(ibin_out);
+        double En_hi = En_lo + hratexs->GetBinWidth(ibin_out);
 
-    for (int ibin_out = 1; ibin_out <= hratexs->GetNbinsX(); ibin_out++) {
-      double En_lo = hratexs->GetBinLowEdge(ibin_out);
-      double En_hi = En_lo + hratexs->GetBinWidth(ibin_out);
-
-      if (En_lo > EnCutHigh)
-        continue;
-
-      // En -> TOF (note: low energy corresponds to high TOF)
-      double tof_hi = calTOF(En_lo, Length);
-      double tof_lo = calTOF(En_hi, Length);
-
-      double sum_weight = 0.0;
-      double dtof = (tof_hi - tof_lo) / nsub;
-
-      for (int isub = 0; isub < nsub; isub++) {
-        double tof = tof_lo + dtof * (isub + 0.5);
-
-        int bin_in = hrate->FindBin(tof);
-        double density = hrate->GetBinContent(bin_in) / hrate->GetBinWidth(bin_in);
-        if (density <= 0)
+        if (En_lo > EnCutHigh)
           continue;
 
-        double En = -1e6;
-        double length = Length;
-        for (size_t j = 0; j < 3; j++) {
-          En = calEn(tof, length);
-          length = Lengthgeo + endeltaL->Eval(En);
+        // En -> TOF (note: low energy corresponds to high TOF)
+        double tof_hi = calTOF(En_lo, Length);
+        double tof_lo = calTOF(En_hi, Length);
+
+        double sum_weight = 0.0;
+        double dtof = (tof_hi - tof_lo) / nsub;
+
+        for (int isub = 0; isub < nsub; isub++) {
+          double tof = tof_lo + dtof * (isub + 0.5);
+
+          int bin_in = hrate->FindBin(tof);
+          double density =
+              hrate->GetBinContent(bin_in) / hrate->GetBinWidth(bin_in);
+          if (density <= 0)
+            continue;
+
+          double En = -1e6;
+          double length = Length;
+          for (size_t j = 0; j < 3; j++) {
+            En = calEn(tof, length);
+            length = Lengthgeo + endeltaL->Eval(En);
+          }
+
+          auto xs_nf = gENDFNF->Eval(En);
+          if (En <= EnCutHigh && xs_nf > 0) {
+            sum_weight += density * dtof / xs_nf;
+          }
         }
 
-        auto xs_nf = gENDFNF->Eval(En);
-        if (En <= EnCutHigh && xs_nf > 0) {
-          sum_weight += density * dtof / xs_nf;
-        }
+        hratexs->SetBinContent(ibin_out, sum_weight);
       }
+    };
 
-      hratexs->SetBinContent(ibin_out, sum_weight);
-    }
-  };
+    // Lambda function to calculate hratexsNs (with self-shielding correction)
+    // Use member variables m_xs_nr and m_xs_ntot
+    auto calhratexsNs = [this, &m_sampletype, &m_nd, endeltaL,
+                         avgDL](TH1D *hrate, TH1D *hratexs, int chid,
+                                double /*ntimes*/) {
+      hratexs->Reset();
+      auto sampletype = m_sampletype[chid];
 
-  // Lambda function to calculate hratexsNs (with self-shielding correction)
-  // Use member variables m_xs_nr and m_xs_ntot
-  auto calhratexsNs = [this, &m_sampletype, &m_nd, endeltaL, avgDL](
-                          TH1D *hrate, TH1D *hratexs, int chid, double /*ntimes*/) {
-    hratexs->Reset();
-    auto sampletype = m_sampletype[chid];
+      // Get channel length
+      auto it_ch = m_fixmConfig->Channels.find(chid);
+      if (it_ch == m_fixmConfig->Channels.end())
+        return;
+      double Length = it_ch->second.Length;
+      double Lengthgeo = Length - avgDL;
 
-    // Get channel length
-    auto it_ch = m_fixmConfig->Channels.find(chid);
-    if (it_ch == m_fixmConfig->Channels.end())
-      return;
-    double Length = it_ch->second.Length;
-    double Lengthgeo = Length - avgDL;
+      // Use member variables
+      auto it_nf = m_xs_nr.find(sampletype);
+      auto it_ntot = m_xs_ntot.find(sampletype);
+      if (it_nf == m_xs_nr.end() || it_ntot == m_xs_ntot.end()) {
+        std::cerr << "  Warning: No cross section data for sample type "
+                  << sampletype << std::endl;
+        return;
+      }
+      auto gENDFNF = it_nf->second;
+      auto gENDFTOT = it_ntot->second;
+      auto nd = m_nd[chid];
 
-    // Use member variables
-    auto it_nf = m_xs_nr.find(sampletype);
-    auto it_ntot = m_xs_ntot.find(sampletype);
-    if (it_nf == m_xs_nr.end() || it_ntot == m_xs_ntot.end()) {
-      std::cerr << "  Warning: No cross section data for sample type "
-                << sampletype << std::endl;
-      return;
-    }
-    auto gENDFNF = it_nf->second;
-    auto gENDFTOT = it_ntot->second;
-    auto nd = m_nd[chid];
+      double EnCutHigh = m_configReader.GetEnergyCutHigh();
+      const int nsub = m_fixmConfig->Global.Intergralnsub;
 
-    double EnCutHigh = m_configReader.GetEnergyCutHigh();
-    const int nsub = m_fixmConfig->Global.Intergralnsub;
+      for (int ibin_out = 1; ibin_out <= hratexs->GetNbinsX(); ibin_out++) {
+        double En_lo = hratexs->GetBinLowEdge(ibin_out);
+        double En_hi = En_lo + hratexs->GetBinWidth(ibin_out);
 
-    for (int ibin_out = 1; ibin_out <= hratexs->GetNbinsX(); ibin_out++) {
-      double En_lo = hratexs->GetBinLowEdge(ibin_out);
-      double En_hi = En_lo + hratexs->GetBinWidth(ibin_out);
-
-      if (En_lo > EnCutHigh)
-        continue;
-
-      // En -> TOF (note: low energy corresponds to high TOF)
-      double tof_hi = calTOF(En_lo, Length);
-      double tof_lo = calTOF(En_hi, Length);
-
-      double sum_weight = 0.0;
-      double dtof = (tof_hi - tof_lo) / nsub;
-
-      for (int isub = 0; isub < nsub; isub++) {
-        double tof = tof_lo + dtof * (isub + 0.5);
-
-        int bin_in = hrate->FindBin(tof);
-        double density = hrate->GetBinContent(bin_in) / hrate->GetBinWidth(bin_in);
-        if (density <= 0)
+        if (En_lo > EnCutHigh)
           continue;
 
-        double En = -1e6;
-        double length = Length;
-        for (size_t j = 0; j < 3; j++) {
-          En = calEn(tof, length);
-          length = Lengthgeo + endeltaL->Eval(En);
+        // En -> TOF (note: low energy corresponds to high TOF)
+        double tof_hi = calTOF(En_lo, Length);
+        double tof_lo = calTOF(En_hi, Length);
+
+        double sum_weight = 0.0;
+        double dtof = (tof_hi - tof_lo) / nsub;
+
+        for (int isub = 0; isub < nsub; isub++) {
+          double tof = tof_lo + dtof * (isub + 0.5);
+
+          int bin_in = hrate->FindBin(tof);
+          double density =
+              hrate->GetBinContent(bin_in) / hrate->GetBinWidth(bin_in);
+          if (density <= 0)
+            continue;
+
+          double En = -1e6;
+          double length = Length;
+          for (size_t j = 0; j < 3; j++) {
+            En = calEn(tof, length);
+            length = Lengthgeo + endeltaL->Eval(En);
+          }
+
+          auto xs_ntot = gENDFTOT->Eval(En);
+          auto xs_nf = gENDFNF->Eval(En);
+          auto yield = 1.0 - exp(-nd * xs_ntot);
+          if (En <= EnCutHigh && xs_nf > 0 && yield > 0) {
+            sum_weight += density * dtof / yield / xs_nf * xs_ntot;
+          }
         }
 
-        auto xs_ntot = gENDFTOT->Eval(En);
-        auto xs_nf = gENDFNF->Eval(En);
-        auto yield = 1.0 - exp(-nd * xs_ntot);
-        if (En <= EnCutHigh && xs_nf > 0 && yield > 0) {
-          sum_weight += density * dtof / yield / xs_nf * xs_ntot;
-        }
+        hratexs->SetBinContent(ibin_out, sum_weight);
+      }
+    };
+
+    // Maps to store histograms
+    std::map<int, TH1D *> m_hrate;
+    std::map<int, TH1D *> m_hratexs;
+    std::map<int, TH1D *> m_hratexsNs;
+    std::map<int, TH1D *> m_herror;
+
+    // Process each channel
+    for (int chID : m_channelIDs) {
+      PrintChannelInfo(chID);
+
+      // Open UF result file
+      std::string ufFilePath = outcomePath + Form("/UF_%d.root", chID);
+      TFile *fin = TFile::Open(ufFilePath.c_str());
+
+      if (!fin || fin->IsZombie()) {
+        std::cerr << "  Warning: Cannot open file " << ufFilePath << std::endl;
+        continue;
       }
 
-      hratexs->SetBinContent(ibin_out, sum_weight);
+      // Get h_finalE histogram
+      TH1D *hEn = nullptr;
+      TH1D *hT = nullptr;
+      TH1D *hError = nullptr;
+      fin->GetObject("h_finalE", hEn);
+      fin->GetObject("hUFt", hT);
+      fin->GetObject("h_UFerroronly", hError);
+      if (!hEn) {
+        std::cerr << "  Warning: h_finalE not found in " << ufFilePath
+                  << std::endl;
+        fin->Close();
+        continue;
+      }
+      if (!hT) {
+        std::cerr << "  Warning: hUFt not found in " << ufFilePath << std::endl;
+        fin->Close();
+        continue;
+      }
+      if (!hError) {
+        std::cerr << "  Warning: h_UFerroronly not found in " << ufFilePath
+                  << std::endl;
+        fin->Close();
+        continue;
+      }
+
+      auto hErrorClone =
+          static_cast<TH1D *>(hError->Clone(Form("h_UFerroronly_%d", chID)));
+      hErrorClone->SetDirectory(0);
+      m_herror[chID] = hErrorClone;
+
+      // Clone histogram to keep it in memory after file closes
+      auto hEnre = static_cast<TH1D *>(hEn->Clone(Form("h1_En_%d", chID)));
+      hEnre->SetDirectory(0);
+
+      // Create output histograms
+      std::cout << "  Calculating rate (Monte Carlo En)..." << std::endl;
+
+      auto hEnxs = static_cast<TH1D *>(hEn->Clone(Form("h1_Enxs_%d", chID)));
+      hEnxs->SetDirectory(0);
+      auto hEnxsNs =
+          static_cast<TH1D *>(hEn->Clone(Form("h1_EnxsNs_%d", chID)));
+      hEnxsNs->SetDirectory(0);
+
+      // Calculate rate histograms
+      std::cout << "  Calculating rate (with self-shielding)..." << std::endl;
+      calhrate(hT, hEnre, chID, ntimes);
+      m_hrate[chID] = hEnre;
+
+      // Calculate rate×xs histograms
+      auto SampleType = m_sampletype[chID];
+      if (m_xs_nr.find(SampleType) != m_xs_nr.end()) {
+        std::cout << "  Calculating rate×xs (without self-shielding)..."
+                  << std::endl;
+        calhratexs(hT, hEnxs, chID, ntimes);
+        m_hratexs[chID] = hEnxs;
+        // Uncomment to calculate with self-shielding correction
+        // std::cout << "  Calculating rate×xsNs (with self-shielding)..."
+        //           << std::endl;
+        // calhratexsNs(hT, hEnxsNs, chID, ntimes);
+        // m_hratexsNs[chID] = hEnxsNs;
+      }
+
+      fin->Close();
     }
+
+    // Save results to output file
+    std::string outpath = outcomePath + "/hratexsuf.root";
+    auto fout = TFile::Open(outpath.c_str(), "RECREATE");
+
+    for (int chID : m_channelIDs) {
+      //
+      if (m_hrate.find(chID) != m_hrate.end()) {
+        m_hrate[chID]->Write();
+      }
+
+      if (m_herror.find(chID) != m_herror.end()) {
+        m_herror[chID]->Write();
+      }
+
+      if (m_hratexs.find(chID) != m_hratexs.end()) {
+        m_hratexs[chID]->Write();
+      }
+      // Uncomment to save self-shielding corrected histograms
+      if (m_hratexsNs.find(chID) != m_hratexsNs.end()) {
+        m_hratexsNs[chID]->Write();
+      }
+    }
+
+    fout->Close();
+
+    std::cout << std::endl;
+    std::cout << "Output file saved: " << outpath << std::endl;
+    std::cout << std::endl;
+
+    // variables m_xs_nr and m_xs_ntot will be cleaned up in destructor or when
+    // LoadSTDENDFData is called again
   };
 
-  // Maps to store histograms
-  std::map<int, TH1D *> m_hrate;
-  std::map<int, TH1D *> m_hratexs;
-  std::map<int, TH1D *> m_hratexsNs;
-  std::map<int, TH1D *> m_herror;
+  std::cout << "\n=== Running GetHRateXSUF for FIXM ===" << std::endl;
+  core_logic();
 
-  // Process each channel
-  for (int chID : m_channelIDs) {
-    PrintChannelInfo(chID);
-
-    // Open UF result file
-    std::string ufFilePath = outcomePath + Form("/UF_%d.root", chID);
-    TFile *fin = TFile::Open(ufFilePath.c_str());
-
-    if (!fin || fin->IsZombie()) {
-      std::cerr << "  Warning: Cannot open file " << ufFilePath << std::endl;
-      continue;
-    }
-
-    // Get h_finalE histogram
-    TH1D *hEn = nullptr;
-    TH1D *hT = nullptr;
-    TH1D *hError = nullptr;
-    fin->GetObject("h_finalE", hEn);
-    fin->GetObject("hUFt", hT);
-    fin->GetObject("h_UFerroronly", hError);
-    if (!hEn) {
-      std::cerr << "  Warning: h_finalE not found in " << ufFilePath
-                << std::endl;
-      fin->Close();
-      continue;
-    }
-    if (!hT) {
-      std::cerr << "  Warning: hUFt not found in " << ufFilePath << std::endl;
-      fin->Close();
-      continue;
-    }
-    if (!hError) {
-      std::cerr << "  Warning: h_UFerroronly not found in " << ufFilePath
-                << std::endl;
-      fin->Close();
-      continue;
-    }
-
-    auto hErrorClone =
-        static_cast<TH1D *>(hError->Clone(Form("h_UFerroronly_%d", chID)));
-    hErrorClone->SetDirectory(0);
-    m_herror[chID] = hErrorClone;
-
-    // Clone histogram to keep it in memory after file closes
-    auto hEnre = static_cast<TH1D *>(hEn->Clone(Form("h1_En_%d", chID)));
-    hEnre->SetDirectory(0);
-
-    // Create output histograms
-    std::cout << "  Calculating rate (Monte Carlo En)..." << std::endl;
-
-    auto hEnxs = static_cast<TH1D *>(hEn->Clone(Form("h1_Enxs_%d", chID)));
-    hEnxs->SetDirectory(0);
-    auto hEnxsNs = static_cast<TH1D *>(hEn->Clone(Form("h1_EnxsNs_%d", chID)));
-    hEnxsNs->SetDirectory(0);
-
-    // Calculate rate histograms
-    std::cout << "  Calculating rate (with self-shielding)..." << std::endl;
-    calhrate(hT, hEnre, chID, ntimes);
-    m_hrate[chID] = hEnre;
-
-    // Calculate rate×xs histograms
-    auto SampleType = m_sampletype[chID];
-    if (m_xs_nr.find(SampleType) != m_xs_nr.end()) {
-      std::cout << "  Calculating rate×xs (without self-shielding)..."
-                << std::endl;
-      calhratexs(hT, hEnxs, chID, ntimes);
-      m_hratexs[chID] = hEnxs;
-      // Uncomment to calculate with self-shielding correction
-      // std::cout << "  Calculating rate×xsNs (with self-shielding)..."
-      //           << std::endl;
-      // calhratexsNs(hT, hEnxsNs, chID, ntimes);
-      // m_hratexsNs[chID] = hEnxsNs;
-    }
-
-    fin->Close();
+  if (m_configReader.GetDataType() == "Flux" && HasLiSiConfig()) {
+    SwitchToLiSi();
+    core_logic();
+    RestoreFromLiSi();
   }
-
-  // Save results to output file
-  std::string outpath = outcomePath + "/hratexsuf.root";
-  auto fout = TFile::Open(outpath.c_str(), "RECREATE");
-
-  for (int chID : m_channelIDs) {
-    //
-    if (m_hrate.find(chID) != m_hrate.end()) {
-      m_hrate[chID]->Write();
-    }
-
-    if (m_herror.find(chID) != m_herror.end()) {
-      m_herror[chID]->Write();
-    }
-
-    if (m_hratexs.find(chID) != m_hratexs.end()) {
-      m_hratexs[chID]->Write();
-    }
-    // Uncomment to save self-shielding corrected histograms
-    if (m_hratexsNs.find(chID) != m_hratexsNs.end()) {
-      m_hratexsNs[chID]->Write();
-    }
-  }
-
-  fout->Close();
-
-  std::cout << std::endl;
-  std::cout << "Output file saved: " << outpath << std::endl;
-  std::cout << std::endl;
-
-  // variables m_xs_nr and m_xs_ntot will be cleaned up in destructor or when
-  // LoadSTDENDFData is called again
 }
 
 void RDataFrameAnalysis::EvalDeltaTc1() {
@@ -2921,6 +3054,160 @@ void RDataFrameAnalysis::EvalDeltaTc1() {
 
   for (auto &pair : hDeltaTc1Map) {
     delete pair.second;
+  }
+
+  PrintClosePrompt();
+}
+
+void RDataFrameAnalysis::CalSimTrans() {
+  PrintSectionHeader("CalSimTrans - Simulation Flux Attenuation");
+
+  // Initialize configuration (energy bins from FIXM config)
+  InitializeCommonConfig();
+  InitializeEnergyBins();
+
+  // Get simulation path and folders
+  const std::string &simPath = m_configReader.GetSimFixmNAttentionPath();
+  if (simPath.empty()) {
+    std::cerr << "Error: SimFixmNAttentionPath is not configured in "
+                 "filepath.json"
+              << std::endl;
+    return;
+  }
+
+  const auto &simFolders = m_fixmConfig->Global.SimFixmNAttentionFolders;
+  if (simFolders.empty()) {
+    std::cerr << "Error: SimFixmNAttentionFolders is empty in FIXM config"
+              << std::endl;
+    return;
+  }
+
+  // Build file list by scanning OutPut/<folder>/*.root
+  TChain simChain("tree");
+  int fileCount = 0;
+  for (const auto &folder : simFolders) {
+    std::string dirPath = simPath + "OutPut/" + folder + "/";
+    std::cout << "Scanning directory: " << dirPath << std::endl;
+
+    try {
+      for (const auto &entry : std::filesystem::directory_iterator(dirPath)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".root") {
+          std::string filePath = entry.path().string();
+          simChain.Add(filePath.c_str());
+          fileCount++;
+          std::cout << "  Added: " << entry.path().filename().string()
+                    << std::endl;
+        }
+      }
+    } catch (const std::filesystem::filesystem_error &e) {
+      std::cerr << "Error scanning directory " << dirPath << ": " << e.what()
+                << std::endl;
+      return;
+    }
+  }
+
+  std::cout << "Total simulation files added: " << fileCount << std::endl;
+  if (fileCount == 0) {
+    std::cerr << "Error: No ROOT files found in simulation directories"
+              << std::endl;
+    return;
+  }
+
+  std::cout << "Total entries in chain: " << simChain.GetEntries() << std::endl;
+
+  // Enable multi-threading and create RDataFrame
+  EnableMultiThreading();
+  ROOT::RDataFrame df(simChain);
+
+  // Build CHIDUSE -> DetID mapping
+  // For each channel in CHIDUSE, get its DetID from the channel config
+  std::vector<std::pair<int, int>> chDetPairs; // (chID, DetID)
+  for (int chID : m_channelIDs) {
+    auto it = m_fixmConfig->Channels.find(chID);
+    if (it == m_fixmConfig->Channels.end()) {
+      std::cerr << "Warning: Channel " << chID << " not found in config"
+                << std::endl;
+      continue;
+    }
+    int detID = it->second.DetID;
+    chDetPairs.emplace_back(chID, detID);
+    std::cout << "Channel " << chID << " -> DetID " << detID << std::endl;
+  }
+
+  // Create histograms for each channel (using DetID for filtering)
+  std::map<int, ROOT::RDF::RResultPtr<TH1D>> hEnMap;
+  for (const auto &[chID, detID] : chDetPairs) {
+    std::string hname = Form("hEn%d", chID);
+    std::string valname = Form("En%d", chID);
+    std::string cmd = Form("vec_sampleNEnergy[vec_ChannelID==%d]", detID);
+
+    auto hEn = df.Define(valname, cmd)
+                   .Histo1D({hname.c_str(), ";Neutron Energy (eV);count",
+                             m_nbins, m_EnBins.data()},
+                            valname);
+    hEnMap.emplace(chID, hEn);
+  }
+
+  // Create incident energy histogram
+  auto hEnin = df.Histo1D(
+      {"hEnin", ";Neutron Energy (eV);count", m_nbins, m_EnBins.data()},
+      "EnIn");
+
+  // Calculate flux attenuation: htrans = hEn / hEnin
+  std::vector<TH1D *> vTrans;
+  for (const auto &[chID, detID] : chDetPairs) {
+    std::string transName = Form("htrans%d", chID);
+    auto htrans = (TH1D *)hEnMap[chID]->Clone(transName.c_str());
+    htrans->Divide(hEnin.GetPtr());
+    htrans->SetYTitle("Attenuation");
+    vTrans.push_back(htrans);
+    std::cout << "Calculated attenuation for channel " << chID
+              << " (DetID=" << detID << ")" << std::endl;
+  }
+
+  // Output to para directory
+  std::string outPath = m_outputPath + m_expName + "/para/";
+  std::string outFile = outPath + "fluxattenuation.root";
+
+  // Create output directory if it doesn't exist
+  std::filesystem::create_directories(outPath);
+
+  auto fout = new TFile(outFile.c_str(), "RECREATE");
+  for (auto *h : vTrans) {
+    h->Write();
+  }
+  fout->Close();
+  delete fout;
+
+  std::cout << "Output written to: " << outFile << std::endl;
+
+  // Draw all attenuation histograms on a single canvas
+  TCanvas *c = new TCanvas("cSimTrans", "Flux Attenuation", 1200, 600);
+  gPad->SetLogx();
+
+  auto *legd = new TLegend();
+  int colorIdx[] = {kRed,    kBlue,   kGreen + 2, kMagenta, kCyan + 1,
+                    kOrange, kViolet, kTeal,      kPink,    kAzure};
+
+  bool first = true;
+  int ihist = 0;
+  for (size_t i = 0; i < vTrans.size(); i++) {
+    int chID = chDetPairs[i].first;
+    int detID = chDetPairs[i].second;
+    TH1D *h = vTrans[i];
+    h->SetLineColor(colorIdx[ihist % 10]);
+    h->SetLineWidth(2);
+    h->DrawClone(first ? "hist" : "hist same");
+    legd->AddEntry(h, Form("CH%d (DetID=%d)", chID, detID), "l");
+    first = false;
+    ihist++;
+  }
+  legd->Draw();
+  c->Update();
+
+  // Cleanup
+  for (auto *h : vTrans) {
+    delete h;
   }
 
   PrintClosePrompt();

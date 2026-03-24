@@ -45,29 +45,40 @@ void NeutronFluxAnalysis::CalUncertainty() {
   PrintSectionHeader("CalUncertainty Analysis");
   InitializeCommonConfig();
 
-  // 获取配置
-  const auto &fixmConfig = m_configReader.GetFIXMConfig();
-  const auto &channelIDs = fixmConfig.Global.CHIDUSE;
-  std::string outcomePath = m_outputPath + m_expName + "/Outcome";
+  auto core_logic = [&]() {
+    // 获取配置，从 m_fixmConfig 获取以适应 LiSi 切换
+    const auto &fixmConfig = *m_fixmConfig;
+    const auto &channelIDs = m_channelIDs;
+    std::string outcomePath = m_outputPath + m_expName + "/Outcome";
 
-  // 初始化数据结构
-  UncertaintyData data;
-  for (const auto &[chID, chConfig] : fixmConfig.Channels) {
-    TString sampletype = chConfig.SampleType.c_str();
-    data.sampletype[chID] = sampletype;
-    data.samplename[chID] = sampletype + Form("%d", chConfig.SampleNumber);
-    data.sampletype_set.insert(sampletype);
+    // 初始化数据结构
+    UncertaintyData data;
+    for (const auto &[chID, chConfig] : fixmConfig.Channels) {
+      TString sampletype = chConfig.SampleType.c_str();
+      data.sampletype[chID] = sampletype;
+      data.samplename[chID] = sampletype + Form("%d", chConfig.SampleNumber);
+      data.sampletype_set.insert(sampletype);
+    }
+
+    // 执行不确定度计算流程
+    LoadRateHistograms(data, outcomePath, channelIDs);
+    CalculateStatisticalUncertainty(data);
+    CalculateUnfoldingUncertainty(data, outcomePath, channelIDs);
+    LoadDetectorUncertainty(data, outcomePath);
+    LoadENDFUncertainty(data);
+    CalculateTotalUncertainty(data, channelIDs);
+    WriteResults(data, outcomePath);
+    DrawUncertaintyPlots(data);
+  };
+
+  std::cout << "\n=== Running CalUncertainty for FIXM ===" << std::endl;
+  core_logic();
+
+  if (m_configReader.GetDataType() == "Flux" && HasLiSiConfig()) {
+    SwitchToLiSi();
+    core_logic();
+    RestoreFromLiSi();
   }
-
-  // 执行不确定度计算流程
-  LoadRateHistograms(data, outcomePath, channelIDs);
-  CalculateStatisticalUncertainty(data);
-  CalculateUnfoldingUncertainty(data, outcomePath, channelIDs);
-  LoadDetectorUncertainty(data, outcomePath);
-  LoadENDFUncertainty(data);
-  CalculateTotalUncertainty(data, channelIDs);
-  WriteResults(data, outcomePath);
-  DrawUncertaintyPlots(data);
 
   PrintClosePrompt();
   std::cout << "\nCalUncertainty analysis completed!" << std::endl;
@@ -402,7 +413,8 @@ void NeutronFluxAnalysis::CalFlux() {
     for (const auto &[chID, chConfig] : m_lisiConfig->Channels) {
       TString sampletype = chConfig.SampleType.c_str();
       lisiData.sampletype[chID] = sampletype;
-      lisiData.samplename[chID] = sampletype + Form("%d", chConfig.SampleNumber);
+      lisiData.samplename[chID] =
+          sampletype + Form("%d", chConfig.SampleNumber);
       lisiData.sampletype_set.insert(sampletype);
       lisiData.detID[chID] = chConfig.DetID;
 
@@ -466,7 +478,7 @@ void NeutronFluxAnalysis::LoadFluxInputData(
     fhratexs_uf->GetObject(Form("h1_Enxs_%d", chid), hratexs_uf);
 
     // 获取衰减修正
-    TString attenName = Form("htrans%d", data.detID[chid]);
+    TString attenName = Form("htrans%d", chid);
     fin_hatten->GetObject(attenName, hatten);
 
     if (hratexs && hratexs_uf && hatten) {
@@ -559,11 +571,16 @@ void NeutronFluxAnalysis::LoadLiSiFluxInputData(
   }
 }
 
-
 void NeutronFluxAnalysis::CalculateFluxByType(
     FluxData &data, const std::vector<int> &channelIDs, double expTime,
     double beamPower, double effectiveArea, int bpd) {
   std::cout << "\nCalculating flux by sample type..." << std::endl;
+
+  if (data.hratexs.empty()) {
+    std::cerr << "Error: No flux input data available. Cannot calculate flux."
+              << std::endl;
+    return;
+  }
 
   // 为每种样品类型初始化通量直方图
   for (const auto &sampletype : data.sampletype_set) {

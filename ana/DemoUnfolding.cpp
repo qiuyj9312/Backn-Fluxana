@@ -66,15 +66,40 @@ int main(int argc, char **argv) {
 
   ConfigReader configReader;
   std::string fpc_path = "./config/filepath.json";
-  std::string exp_path = "./config/202512_Flux.json";
+
   if (!configReader.LoadFilepathConfig(fpc_path)) {
     return -1;
   }
+  std::string exp_path = "config/" + configReader.GetExperimentName() + ".json";
   if (!configReader.LoadExperimentConfig(exp_path)) {
     return -1;
   }
 
-  lof = configReader.GetFIXMConfig().Channels.at(chid).Length;
+  std::string subDir = "";
+  if (configReader.GetDataType() == "Flux") {
+    if (configReader.GetFIXMConfig().Channels.find(chid) !=
+        configReader.GetFIXMConfig().Channels.end()) {
+      lof = configReader.GetFIXMConfig().Channels.at(chid).Length;
+      subDir = "/FIXM";
+    } else if (configReader.GetLiSiConfig().Channels.find(chid) !=
+               configReader.GetLiSiConfig().Channels.end()) {
+      lof = configReader.GetLiSiConfig().Channels.at(chid).Length;
+      subDir = "/LiSi";
+    } else {
+      std::cerr << "Error: Channel " << chid << " not found in configuration!"
+                << std::endl;
+      return -1;
+    }
+  } else {
+    if (configReader.GetFIXMConfig().Channels.find(chid) !=
+        configReader.GetFIXMConfig().Channels.end()) {
+      lof = configReader.GetFIXMConfig().Channels.at(chid).Length;
+    } else {
+      std::cerr << "Error: Channel " << chid
+                << " not found in FIXM configuration!" << std::endl;
+      return -1;
+    }
+  }
 
   std::cout << ", Filename = " << name_infile << ", ChID = " << chid
             << ", FlightPath = " << lof << ", RunNumT = " << RunNumT
@@ -150,7 +175,7 @@ int main(int argc, char **argv) {
   std::string outputPath = (dataType == "XS") ? configReader.GetXSPath()
                                               : configReader.GetFluxPath();
   std::string expName = configReader.GetExperimentName();
-  std::string outcomePath = outputPath + expName + "/Outcome/";
+  std::string outcomePath = outputPath + expName + subDir + "/Outcome/";
   std::string Dir_infile = outcomePath;
 
   TFile *infile = new TFile(TString(Dir_infile + "/" + name_infile), "read");

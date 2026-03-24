@@ -85,15 +85,6 @@ bool ConfigReader::LoadFilepathConfig(const std::string &configPath) {
   m_config.dataType = filepathJson["DataType"].get<std::string>();
   std::cout << "Data type: " << m_config.dataType << std::endl;
 
-  // Extract DetectorType
-  if (!filepathJson.contains("DetectorType")) {
-    std::cerr << "Error: 'DetectorType' key not found in filepath.json" << std::endl;
-    m_isValid = false;
-    return false;
-  }
-  m_config.detectorType = filepathJson["DetectorType"].get<std::string>();
-  std::cout << "Detector type: " << m_config.detectorType << std::endl;
-
   // Extract OriginData
   if (!filepathJson.contains("OriginData")) {
     std::cerr << "Error: 'OriginData' key not found in filepath.json"
@@ -214,6 +205,14 @@ bool ConfigReader::LoadFilepathConfig(const std::string &configPath) {
     m_config.deltaLData =
         m_config.paraPath + filepathJson["DELTALDATA"].get<std::string>();
     std::cout << "Delta L data: " << m_config.deltaLData << std::endl;
+  }
+
+  // Extract SimFixmNAttentionPath (optional)
+  if (filepathJson.contains("SimFixmNAttentionPath")) {
+    m_config.simFixmNAttentionPath =
+        filepathJson["SimFixmNAttentionPath"].get<std::string>();
+    std::cout << "SimFixmNAttention path: " << m_config.simFixmNAttentionPath
+              << std::endl;
   }
 
   std::cout << std::endl;
@@ -359,6 +358,16 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
       fixmConfig.Global.EnergyCut_High = 3e8; // 300 MeV default
     }
 
+    // Read SimFixmNAttentionFolders (optional)
+    if (globalJson.contains("SimFixmNAttentionFolders")) {
+      fixmConfig.Global.SimFixmNAttentionFolders =
+          globalJson["SimFixmNAttentionFolders"]
+              .get<std::vector<std::string>>();
+      std::cout << "SimFixmNAttentionFolders: "
+                << fixmConfig.Global.SimFixmNAttentionFolders.size()
+                << " folders" << std::endl;
+    }
+
     std::cout << "Global FIXM configuration loaded" << std::endl;
   }
 
@@ -403,7 +412,13 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
       chConfig.MassUnit = getUnit(channelJson["Mass"]);
       chConfig.Radius = getValue(channelJson["Radius"]);
       chConfig.A = getValue(channelJson["A"]);
-      chConfig.DetEff = channelJson["DetEff"].get<double>();
+      if (channelJson.contains("DetEff")) {
+        chConfig.DetEff = channelJson["DetEff"].get<double>();
+      } else {
+        chConfig.DetEff = 1.0;
+        std::cout << "Warning: DetEff not found for channel " << channelId
+                  << ", using default: 1.0" << std::endl;
+      }
 
       fixmConfig.Channels[channelId] = chConfig;
     }
@@ -442,19 +457,34 @@ bool ConfigReader::LoadExperimentConfig(const std::string &configPath) {
     m_config.fixmConfig.Global.FPulse = 0.0;
   }
 
-  // Extract ExperimentTime from ExperimentCondition
+  // Extract ExperimentTimeStart from ExperimentCondition
   if (expJson.contains("ExperimentCondition") &&
-      expJson["ExperimentCondition"].contains("ExperimentTime") &&
-      expJson["ExperimentCondition"]["ExperimentTime"].contains("value")) {
-    m_config.experimentTime =
-        expJson["ExperimentCondition"]["ExperimentTime"]["value"].get<int>();
-    std::cout << "Experiment time: " << m_config.experimentTime << " (yyyymm)"
+      expJson["ExperimentCondition"].contains("ExperimentTimeStart") &&
+      expJson["ExperimentCondition"]["ExperimentTimeStart"].contains("value")) {
+    m_config.experimentTimeStart =
+        expJson["ExperimentCondition"]["ExperimentTimeStart"]["value"].get<int>();
+    std::cout << "Experiment start time: " << m_config.experimentTimeStart << " (yyyymm)"
               << std::endl;
   } else {
-    std::cerr << "Warning: ExperimentTime not found in ExperimentCondition, "
+    std::cerr << "Warning: ExperimentTimeStart not found in ExperimentCondition, "
                  "setting to 0"
               << std::endl;
-    m_config.experimentTime = 0;
+    m_config.experimentTimeStart = 0;
+  }
+
+  // Extract ExperimentTimeEnd from ExperimentCondition
+  if (expJson.contains("ExperimentCondition") &&
+      expJson["ExperimentCondition"].contains("ExperimentTimeEnd") &&
+      expJson["ExperimentCondition"]["ExperimentTimeEnd"].contains("value")) {
+    m_config.experimentTimeEnd =
+        expJson["ExperimentCondition"]["ExperimentTimeEnd"]["value"].get<int>();
+    std::cout << "Experiment end time: " << m_config.experimentTimeEnd << " (yyyymm)"
+              << std::endl;
+  } else {
+    std::cerr << "Warning: ExperimentTimeEnd not found in ExperimentCondition, "
+                 "setting to 0"
+              << std::endl;
+    m_config.experimentTimeEnd = 0;
   }
 
   // Extract BeamMode from ExperimentCondition
@@ -677,8 +707,6 @@ std::string ConfigReader::GetExperimentName() const { return m_config.expName; }
 
 std::string ConfigReader::GetDataType() const { return m_config.dataType; }
 
-std::string ConfigReader::GetDetectorType() const { return m_config.detectorType; }
-
 std::string ConfigReader::GetOriginDataPath() const {
   return m_config.originDataPath;
 }
@@ -689,7 +717,9 @@ std::string ConfigReader::GetBeamDataPath() const {
   return m_config.beamDataPath;
 }
 
-int ConfigReader::GetExperimentTime() const { return m_config.experimentTime; }
+int ConfigReader::GetExperimentTimeStart() const { return m_config.experimentTimeStart; }
+
+int ConfigReader::GetExperimentTimeEnd() const { return m_config.experimentTimeEnd; }
 
 const std::vector<std::string> &ConfigReader::GetFileList() const {
   return m_config.fileList;
@@ -810,6 +840,10 @@ double ConfigReader::GetEnergyCutHigh() const {
 
 int ConfigReader::GetIntergralnsub() const {
   return m_config.fixmConfig.Global.Intergralnsub;
+}
+
+std::string ConfigReader::GetSimFixmNAttentionPath() const {
+  return m_config.simFixmNAttentionPath;
 }
 
 bool ConfigReader::IsValid() const { return m_isValid; }

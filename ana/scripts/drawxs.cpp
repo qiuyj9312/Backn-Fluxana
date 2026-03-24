@@ -183,13 +183,18 @@ void drawxs() {
   // 1. 定义评价库数据文件路径
   // ========================================
   const char *evalDataFiles[] = {
-      "/home/qyj/work/XSana/XS/2025_232Th/para/CENDL-3.2.txt",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/ENDFB-VIII.1.txt",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/JEFF-4.0.txt",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/JENDL-5.txt",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/ROSFOND-2010.txt",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/ADS-HE.txt",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/TENDL-2023.txt"};
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/"
+      "CENDL-3.2.txt",
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/"
+      "ENDFB-VIII.1.txt",
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/"
+      "JEFF-4.0.txt",
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/JENDL-5.txt",
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/"
+      "ROSFOND-2010.txt",
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/ADS-HE.txt",
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/para/XSData/232Th/"
+      "TENDL-2023.txt"};
 
   const char *evalDataNames[] = {"CENDL-3.2", "ENDF/B-VIII.1", "JEFF-4.0",
                                  "JENDL-5",   "ROSFOND-2010",  "ADS-HE",
@@ -200,8 +205,8 @@ void drawxs() {
   // ========================================
   // 2. 从 XSSimple.root 读取实验测量数据
   // ========================================
-  TFile *f =
-      TFile::Open("/home/qyj/work/XSana/XS/2025_232Th/Outcome/XSSimple.root");
+  TFile *f = TFile::Open(
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/Outcome/XSSimple.root");
   if (!f || f->IsZombie()) {
     std::cerr << "Error: Cannot open XSSimple.root" << std::endl;
     return;
@@ -251,7 +256,7 @@ void drawxs() {
   // 3.5. 将实验数据导出到 txt 文件
   // ========================================
   const char *expDataFile =
-      "/home/qyj/work/XSana/XS/2025_232Th/Outcome/ExperimentalData.txt";
+      "/home/qyj/work/XSana/OutPut/XS/2025_232Th/ExperimentalData.txt";
   std::ofstream fout(expDataFile);
   if (!fout.is_open()) {
     std::cerr << "Error: Cannot create output file " << expDataFile
@@ -293,15 +298,22 @@ void drawxs() {
   // ========================================
   // 3.5. 读取CSV格式的实验数据
   // ========================================
-  const char *csvDataFiles[] = {
-      "/home/qyj/work/XSana/XS/2025_232Th/para/41455013.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/236540022.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/328730022.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/328730032.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/328870022.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/328870032.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/328890022.csv",
-      "/home/qyj/work/XSana/XS/2025_232Th/para/329190022.csv"};
+  const char *csvDataFiles[] = {"/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/41455013.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/236540022.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/328730022.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/328730032.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/328870022.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/328870032.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/328890022.csv",
+                                "/home/qyj/work/XSana/OutPut/XS/2025_232Th/"
+                                "para/XSData/232Th/329190022.csv"};
 
   const char *csvDataNames[] = {
       "O.Shcherbakov+ 2002",

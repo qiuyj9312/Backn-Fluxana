@@ -70,6 +70,8 @@ struct FIXMGlobalConfig {
   double EnergyCut_Low;            ///< Low energy cut (eV)
   double EnergyCut_U8;             ///< U8 energy cut (eV)
   double EnergyCut_High;           ///< High energy cut (eV)
+
+  std::vector<std::string> SimFixmNAttentionFolders; ///< Simulation output folder names
 };
 
 /**
@@ -90,12 +92,12 @@ struct AnalysisConfig {
   std::string paraPath; ///< Path to Para directory (for parameter files, etc.)
   std::string t0Path;   ///< Path to T0 data directory
   std::string dataType; ///< Data type (XS, Flux, etc.)
-  std::string detectorType;   ///< Detector type (e.g., "FIXM")
   std::string originDataPath; ///< Path to Origin data directory
   std::string fluxPath;       ///< Path to Flux directory
   std::string beamDataPath;   ///< Path to Beam data directory
-  int experimentTime;         ///< Experiment time in yyyymm format (from
-                              ///< ExperimentCondition)
+  std::string simFixmNAttentionPath; ///< Path to FIXM n-attenuation simulation
+  int experimentTimeStart;    ///< Experiment start time in yyyymm format
+  int experimentTimeEnd;      ///< Experiment end time in yyyymm format
   std::string beamMode;   ///< Beam mode (e.g., "SingleBunch", "DoubleBunch")
   std::string beamConfig; ///< Beam configuration (e.g., "60-30-30")
   std::string endStation; ///< End station (e.g., "2")
@@ -192,12 +194,6 @@ public:
   std::string GetDataType() const;
 
   /**
-   * @brief Get detector type
-   * @return Detector type string
-   */
-  std::string GetDetectorType() const;
-
-  /**
    * @brief Get origin data path
    * @return Origin data path string
    */
@@ -216,10 +212,16 @@ public:
   std::string GetBeamDataPath() const;
 
   /**
-   * @brief Get experiment time (yyyymm format)
-   * @return Experiment time as integer, e.g. 202512
+   * @brief Get experiment start time (yyyymm format)
+   * @return Experiment start time as integer, e.g. 202112
    */
-  int GetExperimentTime() const;
+  int GetExperimentTimeStart() const;
+
+  /**
+   * @brief Get experiment end time (yyyymm format)
+   * @return Experiment end time as integer, e.g. 202201
+   */
+  int GetExperimentTimeEnd() const;
 
   /**
    * @brief Get file list
@@ -433,6 +435,12 @@ public:
    * @brief Get integral nsub
    */
   int GetIntergralnsub() const;
+
+  /**
+   * @brief Get simulation FIXM n-attenuation path
+   * @return Simulation path string
+   */
+  std::string GetSimFixmNAttentionPath() const;
 
   /**
    * @brief Check if configuration is valid
