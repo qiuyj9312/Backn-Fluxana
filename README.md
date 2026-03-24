@@ -63,7 +63,7 @@ make -j$(nproc)
 > [!TIP]
 > **📖 详细物理逻辑说明**
 > 关于 `ana` 模块中各个分析函数的底层物理逻辑、计算公式及参数说明，见：
-> [XSana 分析函数详细说明 (IHEP Jupyter)](hhttps://jupyter.ihep.ac.cn/s/izkrsQpPM)
+> [XSana 分析函数详细说明 (IHEP Jupyter)](https://jupyter.ihep.ac.cn/s/izkrsQpPM)
 
 XSana 提供了多种工具来调用 `rdataframe_analysis` 可执行文件。推荐优先使用 **网页 UI 模式**。
 
