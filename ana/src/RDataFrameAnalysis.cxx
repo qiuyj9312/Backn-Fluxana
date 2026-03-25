@@ -284,7 +284,7 @@ bool RDataFrameAnalysis::LoadGammaCuts() {
   return true;
 }
 
-bool RDataFrameAnalysis::LoadXSENDFData() {
+bool RDataFrameAnalysis::LoadXSENDFData(int nrebin) {
   // 默认实现为返回 true，可在派生类中覆写以加载实验样品截面数据
   return true;
 }
@@ -359,7 +359,7 @@ bool RDataFrameAnalysis::LoadSTDENDFData(int nrebin) {
     for (const auto &pair : m_xs_nr) {
       std::string hname = "hxs_nr_" + pair.first;
       TH1D *h = new TH1D(hname.c_str(), pair.first.c_str(), nbins_reb,
-                          rebinnedEdges.data());
+                         rebinnedEdges.data());
       h->SetDirectory(nullptr);
       for (int i = 1; i <= nbins_reb; i++) {
         h->SetBinContent(i, pair.second->Eval(h->GetBinCenter(i)));
@@ -374,7 +374,7 @@ bool RDataFrameAnalysis::LoadSTDENDFData(int nrebin) {
                  "cross sections. Please call InitializeEnergyBins() first."
               << std::endl;
   }
-  LoadXSENDFData();
+  LoadXSENDFData(nrebin);
   return true;
 }
 
@@ -917,18 +917,28 @@ void RDataFrameAnalysis::GetReactionRate() {
           "En", "factor");
 
       // Calculate cross section and yield
+      auto has_xs_nr = (m_xs_nr.find(sampletype) != m_xs_nr.end());
+      TGraph* xs_nr = has_xs_nr ? m_xs_nr.at(sampletype) : nullptr;
+      
       auto df_withXS = df_withFactor.Define(
           "factor_xs_nr",
-          [sampletype, xs_nr = m_xs_nr.at(sampletype)](
-              double En, double factor) { return factor / xs_nr->Eval(En); },
+          [xs_nr](double En, double factor) { 
+            if (!xs_nr) return 0.0;
+            double eval = xs_nr->Eval(En);
+            return (eval > 0) ? factor / eval : 0.0; 
+          },
           {"En", "factor"});
-      // m_h1ExsNs[fChannelID]->Fill(En, factors / yield / xs_nf * xs_ntot);
+
+      auto has_xs_ntot = (m_xs_ntot.find(sampletype) != m_xs_ntot.end());
+      TGraph* xs_ntot = has_xs_ntot ? m_xs_ntot.at(sampletype) : nullptr;
+      
       auto df_withYield = df_withXS.Define(
           "factor_xs_yield",
-          [nd, sampletype,
-           xs_ntot = m_xs_ntot.at(sampletype)](double En, double factor_xs_nf) {
-            return factor_xs_nf / (1. - exp(-nd * xs_ntot->Eval(En))) /
-                   xs_ntot->Eval(En);
+          [nd, xs_ntot](double En, double factor_xs_nf) {
+            if (!xs_ntot) return 0.0;
+            double eval = xs_ntot->Eval(En);
+            if (eval <= 0.0) return 0.0;
+            return factor_xs_nf / (1. - exp(-nd * eval)) / eval;
           },
           {"En", "factor_xs_nr"});
 
@@ -1199,11 +1209,23 @@ void RDataFrameAnalysis::CalFlightPath() {
   std::cout << Form("Fit result is %f, ", l1) << std::endl;
 
   // Calculate and print flight path lengths for each channel
+  int lcalChID = m_configReader.GetLCalChannel();
+  int calDetID = 1;
+  auto it_cal = m_fixmConfig->Channels.find(lcalChID);
+  if (it_cal != m_fixmConfig->Channels.end()) {
+    calDetID = it_cal->second.DetID;
+  } else {
+    std::cerr << "Warning: LCalChannel " << lcalChID
+              << " not found in configuration!" << std::endl;
+  }
   std::cout << "Flight path lengths for channels:" << std::endl;
   for (size_t i = 0; i < m_channelIDs.size(); i++) {
-    std::cout << Form("Channel %d: %f", m_channelIDs[i], l1 + i * DL_cell)
+    int detID = m_fixmConfig->Channels.find(m_channelIDs[i])->second.DetID;
+    std::cout << Form("DetID %d, CHID: %d, FP: %f m", detID, m_channelIDs[i],
+                      l1 + (detID - calDetID) * DL_cell)
               << std::endl;
   }
+
   std::cout << std::endl;
 
   // Load ENDF data files
@@ -1970,7 +1992,6 @@ void RDataFrameAnalysis::CoincheckDoubleBunch() {
       std::cerr << "Error: Failed to load ENDF data" << std::endl;
       return;
     }
-
 
     // Write
     std::string foutPath = Form("%s/hrate_norm.root", outcomePath.c_str());

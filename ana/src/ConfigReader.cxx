@@ -266,6 +266,9 @@ bool ConfigReader::ReadFIXMConfig(const json &fixmJson,
     if (globalJson.contains("LCaldT")) {
       fixmConfig.Global.LCaldT = getValueVector(globalJson["LCaldT"]);
     }
+    if (globalJson.contains("LCalChannel")) {
+      fixmConfig.Global.LCalChannel = static_cast<int>(getValue(globalJson["LCalChannel"]));
+    }
     if (globalJson.contains("LengthSet")) {
       fixmConfig.Global.LengthSet = getValue(globalJson["LengthSet"]);
     }
@@ -788,6 +791,10 @@ double ConfigReader::GetTau(int channelId) const {
   }
   std::cerr << "Warning: Channel " << channelId << " not found, using default tau 80.0 ns" << std::endl;
   return 80.0;
+}
+
+int ConfigReader::GetLCalChannel() const {
+  return m_config.fixmConfig.Global.LCalChannel;
 }
 
 double ConfigReader::GetDL_cell() const {

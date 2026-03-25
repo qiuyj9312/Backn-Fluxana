@@ -168,7 +168,7 @@ protected:
    * @brief 加载实验样品 ENDF 截面数据
    * @return true on success, false on failure
    */
-  virtual bool LoadXSENDFData();
+  virtual bool LoadXSENDFData(int nrebin = 1);
 
   // 输出辅助方法
   /**

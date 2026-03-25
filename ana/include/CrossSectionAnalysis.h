@@ -47,7 +47,7 @@ public:
    * @brief 加载实验样品 ENDF 截面数据
    * @return true on success, false on failure
    */
-  bool LoadXSENDFData() override;
+  bool LoadXSENDFData(int nrebin = 1) override;
 
   /**
    * @brief 计算截面测量不确定度

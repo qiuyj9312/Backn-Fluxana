@@ -174,7 +174,8 @@ inline int get_graph(const char *filename, TGraph *graph_, double times = 1.,
                      TString opts = "") {
   std::ifstream fin_txt(filename);
   if (!fin_txt.is_open()) {
-    std::cerr << "no such file to read graph para!" << std::endl;
+    std::cerr << "no such file " << filename << " to read graph para "
+              << std::endl;
     return -1;
   }
   // read para
@@ -214,8 +215,9 @@ inline int get_graph(const char *filename, TGraph *graph_, double times = 1.,
  * @return {*}
  */
 inline int graph2hist(TGraph *gr, TH1 *h1, TString opts = "") {
-  if (!gr || gr->GetN() == 0) return 0;
-  
+  if (!gr || gr->GetN() == 0)
+    return 0;
+
   double xmin = *std::min_element(gr->GetX(), gr->GetX() + gr->GetN());
   double xmax = *std::max_element(gr->GetX(), gr->GetX() + gr->GetN());
 

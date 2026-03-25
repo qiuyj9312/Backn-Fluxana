@@ -308,12 +308,20 @@ void CrossSectionAnalysis::GetXSSingleBunch() {
   std::cout << std::endl;
 }
 
-bool CrossSectionAnalysis::LoadXSENDFData() {
+bool CrossSectionAnalysis::LoadXSENDFData(int nrebin) {
   if (m_nbins <= 0 || m_EnBins.empty()) {
     std::cerr << "Warning: Energy bins not initialized. Cannot create TH1D for "
                  "cross sections. Please call InitializeEnergyBins() first."
               << std::endl;
     return false;
+  }
+
+  const int step = (nrebin > 1) ? nrebin : 1;
+  const int nbins_reb = m_nbins / step;
+  std::vector<double> rebinnedEdges;
+  rebinnedEdges.reserve(nbins_reb + 1);
+  for (int i = 0; i <= nbins_reb; i++) {
+    rebinnedEdges.push_back(m_EnBins[i * step]);
   }
 
   std::vector<std::string> loadedSampleTypes;
@@ -327,6 +335,13 @@ bool CrossSectionAnalysis::LoadXSENDFData() {
       continue;
     }
 
+    // Skip if already loaded in standard data (e.g. 235U, 6Li)
+    if (m_xs_nr.find(sampleType) != m_xs_nr.end()) {
+      loadedSampleTypes.push_back(sampleType);
+      std::cout << "Data for sample " << sampleType << " already loaded from standard ENDF files." << std::endl;
+      continue;
+    }
+
     std::string filepath = m_outputPath + m_expName + "/para/XSData/" +
                            sampleType + "/ENDFB-VIII.1.txt";
     auto gENDF = new TGraph();
@@ -337,17 +352,17 @@ bool CrossSectionAnalysis::LoadXSENDFData() {
 
       std::string hname = "hxs_nr_" + sampleType;
       TH1D *h =
-          new TH1D(hname.c_str(), sampleType.c_str(), m_nbins, m_EnBins.data());
+          new TH1D(hname.c_str(), sampleType.c_str(), nbins_reb, rebinnedEdges.data());
       h->SetDirectory(nullptr); // Ensure histogram persists beyond current
                                 // directory closing
-      for (int i = 1; i <= m_nbins; i++) {
+      for (int i = 1; i <= nbins_reb; i++) {
         h->SetBinContent(i, gENDF->Eval(h->GetBinCenter(i)));
       }
       m_hxs_nr[sampleType] = h;
       loadedSampleTypes.push_back(sampleType);
 
       std::cout << "Loaded ENDF data for sample: " << sampleType << " from "
-                << filepath << std::endl;
+                << filepath << " (nrebin=" << step << ", nbins=" << nbins_reb << ")." << std::endl;
     } else {
       delete gENDF;
       std::cerr << "Warning: Failed to load or empty ENDF data from "

@@ -55,6 +55,7 @@ struct FIXMGlobalConfig {
   std::vector<double> ThFindminRange; ///< Threshold find minimum range
   std::vector<double> LCalEn;         ///< Calibration energies
   std::vector<double> LCaldT;         ///< Calibration time differences
+  int LCalChannel;                    ///< LCal channel setting
   double LengthSet;                   ///< Length set
   double NoiseCut;                    ///< Noise cut threshold
   std::vector<int> CHIDUSE;           ///< Channel IDs to use
@@ -337,6 +338,12 @@ public:
    * @return Dead-time constant in nanoseconds
    */
   double GetTau(int channelId) const;
+
+  /**
+   * @brief Get LCal channel setting
+   * @return LCal channel setting integer
+   */
+  int GetLCalChannel() const;
 
   /**
    * @brief Get DL_cell value
