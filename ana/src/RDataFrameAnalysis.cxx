@@ -918,26 +918,29 @@ void RDataFrameAnalysis::GetReactionRate() {
 
       // Calculate cross section and yield
       auto has_xs_nr = (m_xs_nr.find(sampletype) != m_xs_nr.end());
-      TGraph* xs_nr = has_xs_nr ? m_xs_nr.at(sampletype) : nullptr;
-      
-      auto df_withXS = df_withFactor.Define(
-          "factor_xs_nr",
-          [xs_nr](double En, double factor) { 
-            if (!xs_nr) return 0.0;
-            double eval = xs_nr->Eval(En);
-            return (eval > 0) ? factor / eval : 0.0; 
-          },
-          {"En", "factor"});
+      TGraph *xs_nr = has_xs_nr ? m_xs_nr.at(sampletype) : nullptr;
+
+      auto df_withXS =
+          df_withFactor.Define("factor_xs_nr",
+                               [xs_nr](double En, double factor) {
+                                 if (!xs_nr)
+                                   return 0.0;
+                                 double eval = xs_nr->Eval(En);
+                                 return (eval > 0) ? factor / eval : 0.0;
+                               },
+                               {"En", "factor"});
 
       auto has_xs_ntot = (m_xs_ntot.find(sampletype) != m_xs_ntot.end());
-      TGraph* xs_ntot = has_xs_ntot ? m_xs_ntot.at(sampletype) : nullptr;
-      
+      TGraph *xs_ntot = has_xs_ntot ? m_xs_ntot.at(sampletype) : nullptr;
+
       auto df_withYield = df_withXS.Define(
           "factor_xs_yield",
           [nd, xs_ntot](double En, double factor_xs_nf) {
-            if (!xs_ntot) return 0.0;
+            if (!xs_ntot)
+              return 0.0;
             double eval = xs_ntot->Eval(En);
-            if (eval <= 0.0) return 0.0;
+            if (eval <= 0.0)
+              return 0.0;
             return factor_xs_nf / (1. - exp(-nd * eval)) / eval;
           },
           {"En", "factor_xs_nr"});
@@ -2973,22 +2976,83 @@ void RDataFrameAnalysis::EvalDeltaTc1() {
             << std::endl;
 
   // Create customized TH1D for each channel
+  std::map<int, TH1D *> hDeltaTc0Map;
   std::map<int, TH1D *> hDeltaTc1Map;
+  std::map<int, TH1D *> hDeltaTc2Map;
+
+  std::map<int, TH2D *> h2Tc0Map;
+  std::map<int, TH2D *> h2Tc1Map;
+  std::map<int, TH2D *> h2Tc2Map;
+
+  // Create logarithmic bins for Tc (X-axis)
+  const int nBinsTc = 1000;
+  double minTc = 1.0; // > 0 for log axis
+  double maxTc = 4e7;
+  std::vector<double> logBinsTc(nBinsTc + 1);
+  double logStep = (std::log10(maxTc) - std::log10(minTc)) / nBinsTc;
+  for (int i = 0; i <= nBinsTc; ++i) {
+    logBinsTc[i] = std::pow(10, std::log10(minTc) + i * logStep);
+  }
+
   for (int chID : m_channelIDs) {
-    TH1D *h =
+    TH1D *h0 =
+        new TH1D(Form("hDeltaTc0_CH%d", chID),
+                 Form("fTc0 difference between adjacent hits in same "
+                      "fEventNumber - Channel %d; #Delta fTc0 (ns); Entries",
+                      chID),
+                 2000, 0, 2000);
+    h0->SetDirectory(nullptr); // Ensure it persists
+    hDeltaTc0Map[chID] = h0;
+
+    TH1D *h1 =
         new TH1D(Form("hDeltaTc1_CH%d", chID),
                  Form("fTc1 difference between adjacent hits in same "
                       "fEventNumber - Channel %d; #Delta fTc1 (ns); Entries",
                       chID),
                  2000, 0, 2000);
-    h->SetDirectory(nullptr); // Ensure it persists
-    hDeltaTc1Map[chID] = h;
+    h1->SetDirectory(nullptr);
+    hDeltaTc1Map[chID] = h1;
+
+    TH1D *h2 =
+        new TH1D(Form("hDeltaTc2_CH%d", chID),
+                 Form("fTc2 difference between adjacent hits in same "
+                      "fEventNumber - Channel %d; #Delta fTc2 (ns); Entries",
+                      chID),
+                 2000, 0, 2000);
+    h2->SetDirectory(nullptr);
+    hDeltaTc2Map[chID] = h2;
+
+    TH2D *h2_0 = new TH2D(
+        Form("h2Tc0_CH%d", chID),
+        Form("fTc0 vs #Delta fTc0 - Channel %d; fTc0 (ns); #Delta fTc0 (ns)",
+             chID),
+        nBinsTc, logBinsTc.data(), 500, 0.0, 4000.0);
+    h2_0->SetDirectory(nullptr);
+    h2Tc0Map[chID] = h2_0;
+
+    TH2D *h2_1 = new TH2D(
+        Form("h2Tc1_CH%d", chID),
+        Form("fTc1 vs #Delta fTc1 - Channel %d; fTc1 (ns); #Delta fTc1 (ns)",
+             chID),
+        nBinsTc, logBinsTc.data(), 500, 0.0, 4000.0);
+    h2_1->SetDirectory(nullptr);
+    h2Tc1Map[chID] = h2_1;
+
+    TH2D *h2_2 = new TH2D(
+        Form("h2Tc2_CH%d", chID),
+        Form("fTc2 vs #Delta fTc2 - Channel %d; fTc2 (ns); #Delta fTc2 (ns)",
+             chID),
+        nBinsTc, logBinsTc.data(), 500, 0.0, 4000.0);
+    h2_2->SetDirectory(nullptr);
+    h2Tc2Map[chID] = h2_2;
   }
 
   // Use TTreeReader to iterate over the flattened TTree
   TTreeReader reader(m_chain);
   TTreeReaderValue<Int_t> fEventNumber(reader, "fEventNumber");
+  TTreeReaderValue<Double_t> fTc0(reader, "fTc0");
   TTreeReaderValue<Double_t> fTc1(reader, "fTc1");
+  TTreeReaderValue<Double_t> fTc2(reader, "fTc2");
   TTreeReaderValue<Double_t> fhpn(reader, "fhpn");
   TTreeReaderValue<Int_t> fChannelID(reader, "fChannelID");
 
@@ -2999,12 +3063,16 @@ void RDataFrameAnalysis::EvalDeltaTc1() {
   }
 
   std::map<int, Int_t> prevEventNumber;
+  std::map<int, Double_t> prevTc0;
   std::map<int, Double_t> prevTc1;
+  std::map<int, Double_t> prevTc2;
   std::map<int, bool> hasPrev;
 
   for (int chID : m_channelIDs) {
     prevEventNumber[chID] = -1;
+    prevTc0[chID] = 0.0;
     prevTc1[chID] = 0.0;
+    prevTc2[chID] = 0.0;
     hasPrev[chID] = false;
   }
 
@@ -3037,45 +3105,105 @@ void RDataFrameAnalysis::EvalDeltaTc1() {
     }
 
     if (hasPrev[chID] && (*fEventNumber == prevEventNumber[chID])) {
+      double deltaTc0 = std::abs(*fTc0 - prevTc0[chID]);
       double deltaTc1 = std::abs(*fTc1 - prevTc1[chID]);
+      double deltaTc2 = std::abs(*fTc2 - prevTc2[chID]);
+      hDeltaTc0Map[chID]->Fill(deltaTc0);
       hDeltaTc1Map[chID]->Fill(deltaTc1);
+      hDeltaTc2Map[chID]->Fill(deltaTc2);
+
+      h2Tc0Map[chID]->Fill(*fTc0, deltaTc0);
+      h2Tc1Map[chID]->Fill(*fTc1, deltaTc1);
+      h2Tc2Map[chID]->Fill(*fTc2, deltaTc2);
     }
 
     prevEventNumber[chID] = *fEventNumber;
+    prevTc0[chID] = *fTc0;
     prevTc1[chID] = *fTc1;
+    prevTc2[chID] = *fTc2;
     hasPrev[chID] = true;
   }
 
   std::cout << "  Progress: " << nEntries << " / " << nEntries << " (100.0%)"
             << std::endl;
 
-  // Draw the histograms on the same canvas
-  TCanvas *c =
-      new TCanvas("cDeltaTc1_all", "Delta Tc1 - All Channels", 1000, 600);
-  gPad->SetLogy();
-  TLegend *legd = new TLegend();
+  // Draw the histograms on a single main canvas with 3 subpads
+  TCanvas *cAll = new TCanvas(
+      "cDeltaTc_all", "Delta Tc (Tc0, Tc1, Tc2) - All Channels", 1500, 500);
+  cAll->Divide(3, 1);
 
-  int ihist = 0;
-  for (int chID : m_channelIDs) {
-    if (hDeltaTc1Map.find(chID) == hDeltaTc1Map.end())
-      continue;
+  auto drawHists = [&](int padIndex, std::map<int, TH1D *> &hMap,
+                       const char *title) {
+    cAll->cd(padIndex);
+    gPad->SetLogy();
+    TLegend *legd = new TLegend();
+    int ihist = 0;
+    for (int chID : m_channelIDs) {
+      if (hMap.find(chID) == hMap.end())
+        continue;
 
-    hDeltaTc1Map[chID]->SetLineColor(color[ihist % 10]);
-    TH1 *hdrawn =
-        hDeltaTc1Map[chID]->DrawCopy(ihist == 0 ? "hist" : "hist same");
-    if (hdrawn) {
-      legd->AddEntry(hdrawn, Form("Channel %d", chID), "l");
+      hMap[chID]->SetTitle(title);
+      hMap[chID]->SetLineColor(color[ihist % 10]);
+      TH1 *hdrawn = hMap[chID]->DrawCopy(ihist == 0 ? "hist" : "hist same");
+      if (hdrawn) {
+        legd->AddEntry(hdrawn, Form("Channel %d", chID), "l");
+      }
+      ihist++;
     }
-    std::cout << "  Drawn histogram for channel " << chID << std::endl;
-    ihist++;
-  }
+    legd->Draw();
+  };
 
-  legd->Draw();
-  c->Update();
+  std::cout << "  Drawing Tc0 histograms..." << std::endl;
+  drawHists(1, hDeltaTc0Map, "Delta Tc0 - All Channels");
+  std::cout << "  Drawing Tc1 histograms..." << std::endl;
+  drawHists(2, hDeltaTc1Map, "Delta Tc1 - All Channels");
+  std::cout << "  Drawing Tc2 histograms..." << std::endl;
+  drawHists(3, hDeltaTc2Map, "Delta Tc2 - All Channels");
 
-  for (auto &pair : hDeltaTc1Map) {
+  cAll->Update();
+
+  // Draw 2D histograms
+  TCanvas *c2DAll =
+      new TCanvas("c2DTc_all", "Tc vs Delta Tc - All Channels", 1500, 500);
+  c2DAll->Divide(3, 1);
+
+  auto draw2DHists = [&](int padIndex, std::map<int, TH2D *> &hMap,
+                         const char *title) {
+    c2DAll->cd(padIndex);
+    gPad->SetLogx();
+    gPad->SetLogz();
+    // Only plotting the first available channel due to TH2D drawing complexity
+    // when overlaying
+    for (int chID : m_channelIDs) {
+      if (hMap.find(chID) != hMap.end()) {
+        hMap[chID]->SetTitle(title);
+        hMap[chID]->DrawCopy("COLZ");
+        break; // draw only first valid channel to show the basic 2D spectrum
+      }
+    }
+  };
+
+  std::cout << "  Drawing 2D Tc0 histograms..." << std::endl;
+  draw2DHists(1, h2Tc0Map, "Tc0 vs Delta Tc0 (1st CH)");
+  std::cout << "  Drawing 2D Tc1 histograms..." << std::endl;
+  draw2DHists(2, h2Tc1Map, "Tc1 vs Delta Tc1 (1st CH)");
+  std::cout << "  Drawing 2D Tc2 histograms..." << std::endl;
+  draw2DHists(3, h2Tc2Map, "Tc2 vs Delta Tc2 (1st CH)");
+
+  c2DAll->Update();
+
+  for (auto &pair : hDeltaTc0Map)
     delete pair.second;
-  }
+  for (auto &pair : hDeltaTc1Map)
+    delete pair.second;
+  for (auto &pair : hDeltaTc2Map)
+    delete pair.second;
+  for (auto &pair : h2Tc0Map)
+    delete pair.second;
+  for (auto &pair : h2Tc1Map)
+    delete pair.second;
+  for (auto &pair : h2Tc2Map)
+    delete pair.second;
 
   PrintClosePrompt();
 }

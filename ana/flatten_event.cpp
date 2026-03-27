@@ -89,7 +89,9 @@ void ConvertToFlatTree(const char *inputFile, const char *outputFile,
   ULong64_t fT0NanoSec;
   Int_t fArrayLength;
   Int_t fChannelID;
+  Double_t fTc0;
   Double_t fTc1;
+  Double_t fTc2;
   Double_t fhpn;
 
   // 创建分支
@@ -98,7 +100,9 @@ void ConvertToFlatTree(const char *inputFile, const char *outputFile,
   outTree->Branch("fT0NanoSec", &fT0NanoSec, "fT0NanoSec/l");
   outTree->Branch("fArrayLength", &fArrayLength, "fArrayLength/I");
   outTree->Branch("fChannelID", &fChannelID, "fChannelID/I");
+  outTree->Branch("fTc0", &fTc0, "fTc0/D");
   outTree->Branch("fTc1", &fTc1, "fTc1/D");
+  outTree->Branch("fTc2", &fTc2, "fTc2/D");
   outTree->Branch("fhpn", &fhpn, "fhpn/D");
 
   // 循环读取并转换
@@ -120,13 +124,17 @@ void ConvertToFlatTree(const char *inputFile, const char *outputFile,
     // 提取数据
     fArrayLength = event->GetArrayLength();
     const std::vector<Int_t> &vChannelID = event->GetChannelID();
+    const std::vector<Double_t> &vT0 = event->GetvT0();
     const std::vector<Double_t> &vTc1 = event->GetvTc1();
+    const std::vector<Double_t> &vTc2 = event->GetvTc2();
     const std::vector<Double_t> &vhpn = event->Getvhpn();
 
     // 通道级完全扁平化：每个通道一行
     for (Int_t j = 0; j < fArrayLength; j++) {
       fChannelID = vChannelID[j];
+      fTc0 = vT0[j];
       fTc1 = vTc1[j];
+      fTc2 = vTc2[j];
       fhpn = vhpn[j];
       outTree->Fill();
     }
